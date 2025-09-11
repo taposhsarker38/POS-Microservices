@@ -1,0 +1,37 @@
+# .dockerignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+
+# virtualenvs
+venv/
+.venv/
+env/
+ENV/
+
+# pip cache/build
+pip-wheel-metadata/
+*.egg-info/
+
+# git & editor
+.git
+.gitignore
+.vscode/
+.idea/
+
+# dotenv / secrets
+.env
+.env.*
+
+# node / frontend
+node_modules/
+dist/
+build/
+.next/
+
+# docker compose override (dev)
+docker-compose.override.yml
