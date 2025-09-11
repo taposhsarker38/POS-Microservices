@@ -75,11 +75,11 @@ WSGI_APPLICATION = 'auth_service.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
+        'ENGINE': os.getenv('POSTGRES_ENGINE', 'django.db.backends.postgresql'),
         'NAME': os.getenv('POSTGRES_DB', 'authdb'),
-        'USER': os.getenv('POSTGRES_USER', 'authuser'),
-        'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'authpass'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'USER': os.getenv('POSTGRES_USER', 'postgres'),
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', 'db'),     # default 'db' রাখছি
         'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
