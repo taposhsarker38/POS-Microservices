@@ -34,3 +34,16 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id','username','email','first_name','last_name','phone','company_id','wing_id','role','email_verified']
+# auth-service: apps/users/serializers.py
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        # add custom claims
+        token['username'] = user.get_username()
+        token['role'] = getattr(user, 'role', None)
+        # token already contains user_id by default
+        return token
+
