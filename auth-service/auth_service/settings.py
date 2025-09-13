@@ -116,14 +116,21 @@ REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
 # Cookie settings (for refresh cookie)
 SESSION_COOKIE_SECURE = False   # prod: True
 CSRF_COOKIE_SECURE = False   
+# SIMPLE_JWT = {
+#     'ALGORITHM': os.getenv('JWT_ALGORITHM', 'HS256'),
+#     'SIGNING_KEY': os.getenv('JWT_SECRET', 'supersecretjwtkey'),
+#     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+#     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+#     'ROTATE_REFRESH_TOKENS': True,
+#     'BLACKLIST_AFTER_ROTATION': True,
+# }
 SIMPLE_JWT = {
     'ALGORITHM': os.getenv('JWT_ALGORITHM', 'HS256'),
-    'SIGNING_KEY': os.getenv('JWT_SECRET', 'supersecretjwtkey'),
+    'SIGNING_KEY': os.getenv('JWT_SECRET'),   # for HS256, this is the secret
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
 }
+
 AUTH_USER_MODEL = 'users.User'
 
 # Password validation
