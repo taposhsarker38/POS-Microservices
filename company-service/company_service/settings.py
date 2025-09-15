@@ -131,3 +131,9 @@ REST_FRAMEWORK = {
 }
 
 
+# audit config
+AUTH_SERVICE_AUDIT_URL = os.getenv('AUTH_SERVICE_AUDIT_URL','http://auth-web:8001/api/v1/audit/')
+SERVICE_API_TOKEN = os.getenv('SERVICE_API_TOKEN','')
+SERVICE_NAME = os.getenv('SERVICE_NAME','company-service')
+AUDIT_LOCAL_QUEUE = os.getenv('AUDIT_LOCAL_QUEUE','/tmp/audit_events.log')
+

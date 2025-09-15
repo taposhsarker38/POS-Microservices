@@ -1,6 +1,10 @@
-version: "3.8"
+# version: "3.8"
 
 services:
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports: ["6379:6379"]
   auth-db:
     image: postgres:15
     restart: unless-stopped
@@ -51,6 +55,7 @@ services:
       - ./auth-service/.env
     depends_on:
       - auth-db
+      - redis
     volumes:
       - ./auth-service:/usr/src/app   # useful for development; remove for production
 
@@ -69,8 +74,18 @@ services:
       - ./company-service/.env
     depends_on:
       - company-db
+      - redis
+      - auth-web
     volumes:
       - ./company-service:/usr/src/app
+  audit-worker:
+    build: ./auth-service
+    command: celery -A auth_service.celery_app worker --loglevel=info --concurrency=1
+    env_file:
+      - ./auth-service/.env
+    depends_on:
+      - redis
+      - auth-db  
 
 volumes:
   auth_db_data:

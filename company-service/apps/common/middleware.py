@@ -16,3 +16,15 @@ class CorrelationIdMiddleware:
             return response
         finally:
             _thread_locals.request = None
+class AuditContextMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+    def __call__(self, request):
+        user = getattr(request,'user',None)
+        actor = None
+        if user and getattr(user,'is_authenticated',False):
+            actor = {'id': str(getattr(user,'id',None)), 'username': getattr(user,'username',None)}
+        request.audit_actor = actor
+        xff = request.META.get('HTTP_X_FORWARDED_FOR')
+        request.audit_ip = (xff.split(',')[0].strip() if xff else request.META.get('REMOTE_ADDR'))
+        return self.get_response(request)

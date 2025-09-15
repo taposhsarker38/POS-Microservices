@@ -1,5 +1,5 @@
-from django.db import models
 import uuid
+from django.db import models
 
 class Company(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -7,7 +7,7 @@ class Company(models.Model):
     code = models.CharField(max_length=50, unique=True)
     address = models.TextField(blank=True, null=True)
     timezone = models.CharField(max_length=50, default='UTC')
-    metadata = models.JSONField(default=dict, blank=True)  # dynamic config storage
+    metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -18,10 +18,11 @@ class Wing(models.Model):
     company = models.ForeignKey(Company, related_name='wings', on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50)
+    metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('company','code')
+        unique_together = ('company', 'code')
 
     def __str__(self):
         return f"{self.company.code} - {self.name}"
