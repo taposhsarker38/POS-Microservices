@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework','corsheaders',
     'rest_framework_simplejwt',
+    'drf_spectacular',
     'apps.companies',
 ]
 
@@ -64,8 +65,8 @@ DATABASES = {
         'NAME': os.getenv('POSTGRES_DB', 'companydb'),
         'USER': os.getenv('POSTGRES_USER', 'postgres'),
         'PASSWORD': os.getenv('POSTGRES_PASSWORD', '01713447728'),
-        'HOST': os.getenv('DB_HOST','db'),
-        'PORT': os.getenv('DB_PORT','5432'),
+        'HOST': os.getenv('POSTGRES_HOST','auth-db'),
+        'PORT': os.getenv('POSTGRES_PORT','5432'),
     }
 }
 CORS_ALLOW_ALL_ORIGINS = True 
@@ -112,9 +113,8 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # settings.py
 SIMPLE_JWT = {
-    'ALGORITHM': os.getenv('JWT_ALGORITHM', 'HS256'),
-    # for verification in other service, use the same secret as VERIFYING_KEY (SimpleJWT uses SIGNING_KEY for verification too)
-    'SIGNING_KEY': os.getenv('JWT_SECRET'),
+    'ALGORITHM': os.getenv('JWT_ALGORITHM','HS256'),
+    'SIGNING_KEY': os.getenv('JWT_SECRET','supersecretjwtkey'),
     'USER_ID_CLAIM': os.getenv('JWT_USER_ID_CLAIM', 'user_id'),
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
 }
@@ -128,6 +128,30 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 
+# audit config
+AUTH_SERVICE_AUDIT_URL = os.getenv('AUTH_SERVICE_AUDIT_URL','http://auth-web:8001/api/v1/audit/')
+SERVICE_API_TOKEN = os.getenv('SERVICE_API_TOKEN','')
+SERVICE_NAME = os.getenv('SERVICE_NAME','company-service')
+AUDIT_LOCAL_QUEUE = os.getenv('AUDIT_LOCAL_QUEUE','/tmp/audit_events.log')
+
+# drf-spectacular settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Company API',         # change per service (Inventory, Auth etc.)
+    'DESCRIPTION': 'Company microservice API',
+    'VERSION': 'v1',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENTS': {
+        'securitySchemes': {
+            'BearerAuth': {
+                'type': 'http',
+                'scheme': 'bearer',
+                'bearerFormat': 'JWT',
+            },
+        },
+    },
+    'SECURITY': [{'BearerAuth': []}],  # apply globally in docs (so Authorize appears)
+}

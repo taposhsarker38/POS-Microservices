@@ -7,9 +7,33 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Permission, Role, AuditLog, User
 from .serializers import PermissionSerializer, RoleSerializer, AuditCreateSerializer, RegisterSerializer, UserSerializer
-from .utils import send_verification_email, verify_email_token
+from django.core import signing
+from django.core.mail import send_mail
+from django.urls import reverse
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 
-# Register
+EMAIL_CONFIRM_SALT = 'email-confirm-salt'
+EMAIL_CONFIRM_EXP_SECONDS = 60 * 60 * 24
+
+def generate_email_token(user):
+    payload = {'user_id': str(user.id)}
+    return signing.dumps(payload, salt=EMAIL_CONFIRM_SALT)
+
+def verify_email_token(token, max_age=EMAIL_CONFIRM_EXP_SECONDS):
+    try:
+        return signing.loads(token, salt=EMAIL_CONFIRM_SALT, max_age=max_age)
+    except Exception:
+        return None
+
+def send_verification_email(user, request):
+    token = generate_email_token(user)
+    verify_path = reverse('verify-email')
+    verify_url = f"{request.scheme}://{request.get_host()}{verify_path}?token={token}"
+    subject = "Verify your email"
+    message = f"Hi {user.username},\n\nPlease verify your email: {verify_url}\n\nExpires in 24h."
+    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
+
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
@@ -23,7 +47,6 @@ class RegisterView(generics.CreateAPIView):
         super().create(request,*args,**kwargs)
         return Response({'detail':'Verification email sent if email valid'}, status=status.HTTP_201_CREATED)
 
-# Verify
 class VerifyEmailView(APIView):
     permission_classes = [permissions.AllowAny]
     def get(self, request):
@@ -41,7 +64,6 @@ class VerifyEmailView(APIView):
         u.save()
         return Response({'detail':'Email verified'}, status=200)
 
-# Permissions & Roles
 class PermissionViewSet(viewsets.ModelViewSet):
     queryset = Permission.objects.all().order_by('code')
     serializer_class = PermissionSerializer
@@ -52,14 +74,17 @@ class RoleViewSet(viewsets.ModelViewSet):
     serializer_class = RoleSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-# Audit ingestion
 class AuditCreateView(generics.CreateAPIView):
     serializer_class = AuditCreateSerializer
     permission_classes = [permissions.IsAuthenticated]
     def perform_create(self, serializer):
+        # Only service accounts or staff allowed
+        user = self.request.user
+        role_name = user.role.name if getattr(user,'role',None) else None
+        if not (user.is_staff or role_name == 'service_account'):
+            raise PermissionDenied("Only service accounts can post audit logs")
         serializer.save()
 
-# Token serializer - embed role & permissions
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
@@ -73,16 +98,16 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class CookieTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
-    permission_classes = [permissions.AllowAny]
+    print("CookieTokenObtainPairView")
+
     def post(self, request, *args, **kwargs):
-        resp = super().post(request,*args,**kwargs)
-        if resp.status_code == 200:
-            refresh_token = resp.data.get('refresh')
-            access_token = resp.data.get('access')
-            cookie_max_age = int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds())
-            secure_flag = not settings.DEBUG
-            resp.set_cookie('refresh_token', refresh_token, httponly=True, secure=secure_flag, samesite='Lax', max_age=cookie_max_age)
-            resp.data = {'access': access_token, 'detail':'Login successful'}
+        resp = super().post(request, *args, **kwargs)
+        # Set refresh in cookie (if present)
+        if resp.status_code == 200 and 'refresh' in resp.data:
+            refresh = resp.data['refresh']
+            resp.set_cookie('refresh_token', refresh, httponly=True, secure=not settings.DEBUG, samesite='Lax')
+            # keep access in body
+            resp.data = {'access': resp.data.get('access')}
         return resp
 
 class CookieTokenRefreshView(APIView):
@@ -96,15 +121,12 @@ class CookieTokenRefreshView(APIView):
         except Exception:
             return Response({'detail':'Invalid refresh token.'}, status=401)
         new_access = str(token.access_token)
-        # Optionally rotate: handled by SIMPLE_JWT if enabled
         cookie_max_age = int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds())
         secure_flag = not settings.DEBUG
         resp = Response({'access': new_access})
         resp.set_cookie('refresh_token', str(token), httponly=True, secure=secure_flag, samesite='Lax', max_age=cookie_max_age)
         return resp
 
-# Logout: blacklists refresh if possible and clears cookie
-from rest_framework.permissions import IsAuthenticated
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
@@ -119,18 +141,15 @@ class LogoutView(APIView):
         resp.delete_cookie('refresh_token')
         return resp
 
-# Me view
 class MeView(generics.RetrieveAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
     def get_object(self):
         return self.request.user
 
-# management endpoint to build service token (admin only)
 class MakeServiceTokenView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
     def post(self, request):
-        # expects {"username":"svc_name","password":"..."}
         if not request.user.is_staff:
             return Response({'detail':'admin only'},status=403)
         username = request.data.get('username')
