@@ -1,9 +1,7 @@
 
 psycopg2-binary
-
-
+drf-spectacular
 django-environ
-
 Django==4.2
 djangorestframework==3.14
 djangorestframework-simplejwt==5.2.2

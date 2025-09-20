@@ -98,16 +98,16 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class CookieTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
-    permission_classes = [permissions.AllowAny]
+    print("CookieTokenObtainPairView")
+
     def post(self, request, *args, **kwargs):
-        resp = super().post(request,*args,**kwargs)
-        if resp.status_code == 200:
-            refresh_token = resp.data.get('refresh')
-            access_token = resp.data.get('access')
-            cookie_max_age = int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds())
-            secure_flag = not settings.DEBUG
-            resp.set_cookie('refresh_token', refresh_token, httponly=True, secure=secure_flag, samesite='Lax', max_age=cookie_max_age)
-            resp.data = {'access': access_token, 'detail':'Login successful'}
+        resp = super().post(request, *args, **kwargs)
+        # Set refresh in cookie (if present)
+        if resp.status_code == 200 and 'refresh' in resp.data:
+            refresh = resp.data['refresh']
+            resp.set_cookie('refresh_token', refresh, httponly=True, secure=not settings.DEBUG, samesite='Lax')
+            # keep access in body
+            resp.data = {'access': resp.data.get('access')}
         return resp
 
 class CookieTokenRefreshView(APIView):

@@ -1,10 +1,12 @@
-# version: "3.8"
+version: "3.9"
 
 services:
   redis:
     image: redis:7
     restart: unless-stopped
-    ports: ["6379:6379"]
+    ports:
+      - "6379:6379"
+
   auth-db:
     image: postgres:15
     restart: unless-stopped
@@ -15,11 +17,10 @@ services:
     volumes:
       - auth_db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
       timeout: 5s
-      retries: 5
-    # Uncomment to expose DB to host (for tooling); avoid in prod if not needed
+      retries: 10
     ports:
       - "5433:5432"
 
@@ -27,26 +28,43 @@ services:
     image: postgres:15
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-companydb}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-01713447728}
+      POSTGRES_DB: companydb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "01713447728"
     volumes:
       - company_db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
     ports:
       - "5434:5432"
+
+  inventory-db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: inventorydb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "01713447728"
+    volumes:
+      - inventory_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5435:5432"
 
   auth-web:
     build:
       context: ./auth-service
-    container_name: auth-service   # optional: remove if you want Compose-managed names
+    container_name: auth-service
     restart: unless-stopped
     command: >
-      bash -c "until nc -z auth-db 5432; do echo 'Waiting for auth-db...'; sleep 1; done;
+      bash -c "until pg_isready -h auth-db -U postgres; do echo 'Waiting for auth-db...'; sleep 1; done;
                python manage.py migrate --noinput &&
                python manage.py runserver 0.0.0.0:8000"
     ports:
@@ -57,7 +75,7 @@ services:
       - auth-db
       - redis
     volumes:
-      - ./auth-service:/usr/src/app   # useful for development; remove for production
+      - ./auth-service:/usr/src/app
 
   company-web:
     build:
@@ -65,7 +83,7 @@ services:
     container_name: company-service
     restart: unless-stopped
     command: >
-      bash -c "until nc -z company-db 5432; do echo 'Waiting for company-db...'; sleep 1; done;
+      bash -c "until pg_isready -h company-db -U postgres; do echo 'Waiting for company-db...'; sleep 1; done;
                python manage.py migrate --noinput &&
                python manage.py runserver 0.0.0.0:8000"
     ports:
@@ -78,6 +96,25 @@ services:
       - auth-web
     volumes:
       - ./company-service:/usr/src/app
+
+  inventory-web:
+    build: ./inventory_service
+    container_name: inventory-web
+    restart: unless-stopped
+    command: >
+      bash -c "until pg_isready -h inventory-db -U postgres; do echo 'Waiting for inventory-db...'; sleep 1; done;
+               python manage.py migrate --noinput &&
+               python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - "8003:8000"
+    env_file: ./inventory_service/.env
+    depends_on:
+      - inventory-db
+      - redis
+      - auth-web
+    volumes:
+      - ./inventory_service:/usr/src/app
+
   audit-worker:
     build: ./auth-service
     command: celery -A auth_service.celery_app worker --loglevel=info --concurrency=1
@@ -85,8 +122,18 @@ services:
       - ./auth-service/.env
     depends_on:
       - redis
-      - auth-db  
+      - auth-db
+
+  audit-subscriber:
+    build: ./auth-service
+    container_name: audit-subscriber
+    command: python tools/audit_subscriber.py
+    env_file: ./auth-service/.env
+    depends_on:
+      - redis
+      - auth-db
 
 volumes:
   auth_db_data:
   company_db_data:
+  inventory_db_data:

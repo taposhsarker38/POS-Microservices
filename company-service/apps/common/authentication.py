@@ -1,19 +1,36 @@
-# company-service/apps/common/authentication.py
 from rest_framework import authentication, exceptions
 from rest_framework_simplejwt.backends import TokenBackend
 from django.conf import settings
 from types import SimpleNamespace
 
+class RemoteUser(SimpleNamespace):
+    def __init__(self, payload):
+        super().__init__(
+            id=payload.get(settings.SIMPLE_JWT.get('USER_ID_CLAIM', 'user_id')),
+            username=payload.get('username') or payload.get('email') or '',
+            role=payload.get('role'),
+            permissions=payload.get('permissions') or [],
+            is_authenticated=True,
+            is_active=payload.get('is_active', True),
+            is_staff=payload.get('is_staff', False),
+            is_superuser=payload.get('is_superuser', False),
+        )
+
+    def has_perm(self, perm):
+        return perm in (self.permissions or [])
+
+
 class JWTAuthenticationNoDB(authentication.BaseAuthentication):
     """
-    Verifies JWT signature using SIMPLE_JWT settings (SIGNING_KEY / ALGORITHM)
-    and returns a lightweight user object built from token claims.
-    This avoids looking up a local User model.
+    Validate JWT signature via TokenBackend and return (RemoteUser, validated_token)
+    so request.user and request.auth are both available.
     """
-
     def authenticate(self, request):
         header = authentication.get_authorization_header(request).split()
-        if not header or header[0].lower() != b'bearer':
+        if not header:
+            return None
+
+        if header[0].lower() != b'bearer':
             return None
 
         if len(header) == 1:
@@ -23,24 +40,13 @@ class JWTAuthenticationNoDB(authentication.BaseAuthentication):
 
         token = header[1].decode('utf-8')
         try:
-            token_backend = TokenBackend(algorithm=settings.SIMPLE_JWT.get('ALGORITHM', 'HS256'),
-                                         signing_key=settings.SIMPLE_JWT.get('SIGNING_KEY'))
+            token_backend = TokenBackend(
+                algorithm=settings.SIMPLE_JWT.get('ALGORITHM', 'HS256'),
+                signing_key=settings.SIMPLE_JWT.get('SIGNING_KEY')
+            )
             validated_token = token_backend.decode(token, verify=True)
         except Exception as e:
             raise exceptions.AuthenticationFailed('Invalid or expired token.') from e
 
-        # pick user fields from token payload
-        user_id = validated_token.get(settings.SIMPLE_JWT.get('USER_ID_CLAIM', 'user_id'))
-        username = validated_token.get('username')
-        role = validated_token.get('role')
-
-        # Make a lightweight user object
-        user = SimpleNamespace(
-            is_authenticated=True,
-            id=user_id,
-            username=username,
-            role=role
-        )
-
-        # return token as second element per DRF bridge (can be raw string)
-        return (user, token)
+        user = RemoteUser(validated_token)
+        return (user, validated_token)

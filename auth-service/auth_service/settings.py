@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'rest_framework_simplejwt.token_blacklist',
+    'drf_spectacular',
     # local apps
     'apps.users',
 ]
@@ -80,7 +81,7 @@ DATABASES = {
         'NAME': os.getenv('POSTGRES_DB', 'authdb'),
         'USER': os.getenv('POSTGRES_USER', 'postgres'),
         'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''),
-        'HOST': os.getenv('DB_HOST', 'db'),     # default 'db' রাখছি
+        'HOST': os.getenv('DB_HOST', 'auth-db'),     # default 'db' রাখছি
         'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
@@ -102,6 +103,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 # DRF throttling (rate limiting)
@@ -134,13 +136,14 @@ CSRF_COOKIE_SECURE = False
 #     'BLACKLIST_AFTER_ROTATION': True,
 # }
 SIMPLE_JWT = {
-    'ALGORITHM': os.getenv('JWT_ALGORITHM', 'HS256'),
-    'SIGNING_KEY': os.getenv('JWT_SECRET'),   # for HS256, this is the secret
+    'ALGORITHM': os.getenv('JWT_ALGORITHM','HS256'),
+    'SIGNING_KEY': os.getenv('JWT_SECRET','supersecretjwtkey'),
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
 }
+
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
