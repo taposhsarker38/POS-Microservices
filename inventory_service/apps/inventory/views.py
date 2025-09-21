@@ -35,45 +35,90 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 
 class StockViewSet(viewsets.ViewSet):
-    """
-    Stock operations:
-      - reserve: reserve stock for pending orders
-      - finalize: consume reserved stock (on payment)
-      - adjust: if requester has approval permission -> direct adjust,
-                otherwise create InventoryChangeRequest (ICR)
-    """
     permission_classes = [IsAuthenticated, HasPermission]
-
-    @action(detail=False, methods=['post'], url_path='reserve')
-    def reserve(self, request):
-        """
-        Reserve stock for an order.
-        Payload:
-          {
-            "product_id": "<uuid>",
-            "company_id": "<uuid|null>",
-            "wing_id": "<uuid|null>",
-            "qty": 2,
-            "external_id": "order:123:reserve"
-          }
-        """
-        self.required_permission = 'stock.reserve'
+    @action(detail=False, methods=['post'], url_path='initialize')
+    def initialize(self, request):
         product_id = request.data.get('product_id')
         company_id = request.data.get('company_id')
         wing_id = request.data.get('wing_id')
         qty = int(request.data.get('qty', 0))
-        external_id = request.data.get('external_id')
+        external_id = request.data.get('external_id', None)
 
+        # ✅ Validation
+        if not all([product_id, company_id, wing_id]):
+            return Response({'detail': 'product_id, company_id, wing_id required'}, status=400)
         if qty <= 0:
             return Response({'detail': 'qty must be positive'}, status=400)
 
         with transaction.atomic():
-            stock, _ = Stock.objects.select_for_update().get_or_create(
-                product_id=product_id, company_id=company_id, wing_id=wing_id,
-                defaults={'qty': 0, 'reserved': 0}
+            # ✅ get_or_create ensures duplicate prevention
+            stock, created = Stock.objects.select_for_update().get_or_create(
+                product_id=product_id,
+                company_id=company_id,
+                wing_id=wing_id,
+                defaults={'qty': qty, 'reserved': 0}
+            )
+            if not created:
+                stock.qty = qty
+                stock.reserved = 0
+                stock.save()
+
+            # ✅ Transaction log
+            if external_id and StockTransaction.objects.filter(external_id=external_id).exists():
+                tx = StockTransaction.objects.filter(external_id=external_id).first()
+                return Response({
+                    'detail': 'already initialized',
+                    'stock': StockSerializer(stock).data,
+                    'tx': StockTransactionSerializer(tx).data
+                }, status=200)
+
+            tx = StockTransaction.objects.create(
+                stock=stock,
+                change=qty,
+                reason='initialize',
+                external_id=external_id,
+                created_by_id=getattr(request.user, 'id', None),
+                created_by_username=getattr(request.user, 'username', None)
             )
 
-            # idempotency: if a transaction with external_id exists, return OK
+            # ✅ Audit log
+            publish_audit({
+                'actor_id': str(getattr(request.user, 'id', None)),
+                'actor_username': getattr(request.user, 'username', None),
+                'service': 'inventory-service',
+                'action': 'stock.initialize',
+                'resource_type': 'product',
+                'resource_id': str(product_id),
+                'details': {'qty': qty, 'company_id': company_id, 'wing_id': wing_id, 'external_id': external_id},
+                'ip_address': request.META.get('REMOTE_ADDR')
+            })
+
+        return Response({
+            'detail': 'initialized',
+            'stock': StockSerializer(stock).data,
+            'tx': StockTransactionSerializer(tx).data
+        }, status=201)
+    @action(detail=False, methods=['post'], url_path='reserve')
+    def reserve(self, request):
+        self.required_permission = 'stock.reserve'
+        product_id = request.data.get('product_id')
+        company_id = request.data.get('company_id')
+        wing_id = request.data.get('wing_id')
+        external_id = request.data.get('external_id')
+
+        try:
+            qty = int(request.data.get('qty', 0))
+        except (TypeError, ValueError):
+            return Response({'detail': 'qty must be integer'}, status=400)
+        if qty <= 0:
+            return Response({'detail': 'qty must be positive'}, status=400)
+
+        with transaction.atomic():
+            stock, created = Stock.objects.select_for_update().get_or_create(
+                product_id=product_id, company_id=company_id, wing_id=wing_id,
+                defaults={'qty': qty, 'reserved': 0}
+            )
+
             if external_id and StockTransaction.objects.filter(external_id=external_id).exists():
                 return Response({'detail': 'already reserved'}, status=200)
 
@@ -104,7 +149,6 @@ class StockViewSet(viewsets.ViewSet):
             'ip_address': request.META.get('REMOTE_ADDR')
         })
 
-        # low-stock check (may enqueue notifications)
         try:
             check_and_notify_low_stock(stock)
         except Exception:
@@ -114,43 +158,34 @@ class StockViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'], url_path='finalize')
     def finalize(self, request):
-        """
-        Finalize (decrease) reserved stock on payment.
-        Payload:
-          {
-            "product_id": "<uuid>",
-            "company_id": "<uuid|null>",
-            "wing_id": "<uuid|null>",
-            "qty": 2,
-            "external_id": "order:123:finalize"
-          }
-        """
         self.required_permission = 'stock.decrease'
         product_id = request.data.get('product_id')
         company_id = request.data.get('company_id')
         wing_id = request.data.get('wing_id')
-        qty = int(request.data.get('qty', 0))
         external_id = request.data.get('external_id')
 
+        try:
+            qty = int(request.data.get('qty', 0))
+        except (TypeError, ValueError):
+            return Response({'detail': 'qty must be integer'}, status=400)
         if qty <= 0:
             return Response({'detail': 'qty must be positive'}, status=400)
 
         with transaction.atomic():
-            stock = Stock.objects.select_for_update().filter(product_id=product_id, company_id=company_id, wing_id=wing_id).first()
-            if not stock:
-                return Response({'detail': 'no stock record'}, status=400)
+            stock, created = Stock.objects.select_for_update().get_or_create(
+                product_id=product_id, company_id=company_id, wing_id=wing_id,
+                defaults={'qty': qty, 'reserved': 0}
+            )
 
             if external_id and StockTransaction.objects.filter(external_id=external_id).exists():
                 return Response({'detail': 'already finalized'}, status=200)
 
             if stock.reserved >= qty:
-                # consume reserved
                 stock.reserved -= qty
                 stock.qty -= qty
             else:
-                # no reserved or not enough reserved: try direct consume if overall qty ok
                 if stock.qty < qty:
-                    return Response({'detail': 'insufficient stock'}, status=400)
+                    return Response({'detail': 'insufficient stock', 'available': stock.qty}, status=400)
                 stock.qty -= qty
                 stock.reserved = max(0, stock.reserved - qty)
 
@@ -185,31 +220,22 @@ class StockViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'], url_path='adjust')
     def adjust(self, request):
-        """
-        Manual adjust endpoint:
-          - If user has 'stock.approve_adjust' permission: perform direct adjust (admin/manager).
-          - Otherwise: create an InventoryChangeRequest (ICR) for approval.
-
-        Payload:
-          {"product_id":"...","company_id":"...","wing_id":"...","change": -3, "reason":"stocktake", "external_id":"adj:xx"}
-        """
         product_id = request.data.get('product_id')
         company_id = request.data.get('company_id')
         wing_id = request.data.get('wing_id')
+        external_id = request.data.get('external_id')
+        reason = request.data.get('reason', 'adjust')
+
         try:
             change = int(request.data.get('change', 0))
         except (TypeError, ValueError):
             return Response({'detail': 'change must be integer'}, status=400)
-
-        reason = request.data.get('reason', 'adjust')
-        external_id = request.data.get('external_id')
-
         if change == 0:
             return Response({'detail': 'change cannot be zero'}, status=400)
 
         user = request.user
 
-        # If user has approval permission -> do direct adjust
+        # direct adjust if user has permission
         if token_has_permission(request, 'stock.approve_adjust') or getattr(user, 'is_staff', False):
             with transaction.atomic():
                 stock, _ = Stock.objects.select_for_update().get_or_create(
@@ -217,7 +243,7 @@ class StockViewSet(viewsets.ViewSet):
                     defaults={'qty': 0, 'reserved': 0}
                 )
 
-                # idempotency for external_id
+                # idempotency check
                 if external_id and StockTransaction.objects.filter(external_id=external_id).exists():
                     tx = StockTransaction.objects.filter(external_id=external_id).first()
                     return Response({'detail': 'already adjusted', 'stock': StockSerializer(stock).data, 'tx': StockTransactionSerializer(tx).data}, status=200)
@@ -252,26 +278,28 @@ class StockViewSet(viewsets.ViewSet):
 
             return Response({'detail': 'adjusted', 'stock': StockSerializer(stock).data, 'tx': StockTransactionSerializer(tx).data}, status=200)
 
-        # ELSE: create InventoryChangeRequest (requisition) for approval
-        if external_id and InventoryChangeRequest.objects.filter(external_id=external_id).exists():
-            existing = InventoryChangeRequest.objects.filter(external_id=external_id).first()
-            return Response({'detail': 'request already exists', 'request': InventoryChangeRequestSerializer(existing).data}, status=200)
+        # ELSE: create InventoryChangeRequest for approval
+        with transaction.atomic():
+            if external_id and InventoryChangeRequest.objects.filter(external_id=external_id).exists():
+                existing = InventoryChangeRequest.objects.filter(external_id=external_id).first()
+                return Response({'detail': 'request already exists', 'request': InventoryChangeRequestSerializer(existing).data}, status=200)
 
-        icr_data = {
-            'product': product_id,
-            'company_id': company_id,
-            'wing_id': wing_id,
-            'change': change,
-            'reason': reason,
-            'external_id': external_id
-        }
-        icr_serializer = InventoryChangeRequestCreateSerializer(data=icr_data)
-        icr_serializer.is_valid(raise_exception=True)
-        icr_obj = icr_serializer.save(
-            requested_by_id=getattr(user, 'id', None),
-            requested_by_username=getattr(user, 'username', None),
-            status=InventoryChangeRequest.STATUS_PENDING
-        )
+            icr_data = {
+                'product': product_id,
+                'company_id': company_id,
+                'wing_id': wing_id,
+                'change': change,
+                'reason': reason,
+                'external_id': external_id
+            }
+
+            icr_serializer = InventoryChangeRequestCreateSerializer(data=icr_data)
+            icr_serializer.is_valid(raise_exception=True)
+            icr_obj = icr_serializer.save(
+                requested_by_id=getattr(user, 'id', None),
+                requested_by_username=getattr(user, 'username', None),
+                status=InventoryChangeRequest.STATUS_PENDING
+            )
 
         publish_audit({
             'actor_id': str(getattr(user, 'id', None)),
@@ -288,10 +316,6 @@ class StockViewSet(viewsets.ViewSet):
 
 
 class InventoryChangeRequestViewSet(viewsets.ModelViewSet):
-    """
-    CRUD & actions for InventoryChangeRequest (ICR).
-    Approvers call approve/reject actions.
-    """
     queryset = InventoryChangeRequest.objects.all().order_by('-created_at')
     serializer_class = InventoryChangeRequestSerializer
     permission_classes = [IsAuthenticated, HasPermission, IsRequesterOrApproverOrReadOnly]
@@ -322,11 +346,6 @@ class InventoryChangeRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='approve')
     def approve(self, request, pk=None):
-        """
-        Approver approves: apply change to stock atomically, create StockTransaction,
-        update ICR status -> APPROVED.
-        Requires permission 'stock.approve_adjust' (enforced via HasPermission when set).
-        """
         self.required_permission = 'stock.approve_adjust'
         req = self.get_object()
 
@@ -398,9 +417,6 @@ class InventoryChangeRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='reject')
     def reject(self, request, pk=None):
-        """
-        Approver rejects the ICR.
-        """
         self.required_permission = 'stock.approve_adjust'
         req = self.get_object()
 
@@ -440,11 +456,6 @@ class InventoryChangeRequestViewSet(viewsets.ModelViewSet):
         return Response({'detail': 'rejected'}, status=200)
 
     def get_queryset(self):
-        """
-        Filter pending requests for non-approvers to only show their own requests.
-        Approvers (token having 'stock.approve_adjust') see all.
-        Optionally filter by ?status=...
-        """
         qs = super().get_queryset()
         status_q = self.request.query_params.get('status')
         if status_q:

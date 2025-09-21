@@ -9,7 +9,7 @@ alias deactivate 'test $?_OLD_VIRTUAL_PATH != 0 && setenv PATH "$_OLD_VIRTUAL_PA
 # Unset irrelevant variables.
 deactivate nondestructive
 
-setenv VIRTUAL_ENV '/media/taposh/New Volume1/New folder (2)/POS-Microservices/inventory_service/venv'
+setenv VIRTUAL_ENV '/mnt/01DBD436B086D330/New folder (2)/POS-Microservices/inventory_service/venv'
 
 set _OLD_VIRTUAL_PATH="$PATH"
 setenv PATH "$VIRTUAL_ENV/"bin":$PATH"
