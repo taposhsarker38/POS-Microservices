@@ -12,21 +12,37 @@ class Category(models.Model):
 
 class Product(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='products')
+    sku = models.CharField(max_length=128, blank=True, null=True, db_index=True)
     name = models.CharField(max_length=255)
-    sku = models.CharField(max_length=100, unique=True)
-    price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    category = models.CharField(max_length=100, blank=True, null=True)  # e.g. FMCG, Medicine, Electronics
+    brand = models.CharField(max_length=100, blank=True, null=True)
+    supplier = models.CharField(max_length=255, blank=True, null=True)
+    is_batch_tracked = models.BooleanField(default=False)  # medicine etc
+    default_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    default_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self): return self.sku + ' - ' + self.name
+class Batch(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='batches')
+    batch_no = models.CharField(max_length=128, db_index=True)
+    expiry_date = models.DateField(null=True, blank=True)
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    qty = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('product', 'batch_no')
 
 class Stock(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     product = models.ForeignKey(Product, related_name='stocks', on_delete=models.CASCADE)
     company_id = models.UUIDField(blank=True, null=True)
     wing_id = models.UUIDField(blank=True, null=True)
+    batch = models.ForeignKey(Batch, null=True, blank=True, on_delete=models.SET_NULL)
     qty = models.IntegerField(default=0)
     reserved = models.IntegerField(default=0)
     reorder_level = models.IntegerField(default=0)
@@ -34,21 +50,35 @@ class Stock(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('product','company_id','wing_id')
+        unique_together = ('product','company_id','wing_id','batch')
 
     def __str__(self): return f'{self.product.sku} @ {self.company_id or "global"}'
+    @property
+    def available(self):
+        return self.qty - self.reserved
 
 
 class StockTransaction(models.Model):
+    TRANSACTION_TYPE_CHOICES = [
+        ('initialize','initialize'), ('purchase','purchase'), ('sale','sale'),
+        ('reserve','reserve'), ('finalize','finalize'), ('adjust','adjust'), ('return','return')
+    ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    stock = models.ForeignKey(Stock, related_name='transactions', on_delete=models.CASCADE)
-    change = models.IntegerField()  # negative for decrease
-    reason = models.CharField(max_length=200, blank=True)
-    external_id = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-    created_by_id = models.UUIDField(blank=True, null=True)
-    created_by_username = models.CharField(max_length=150, blank=True, null=True)
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name='transactions')
+    change = models.IntegerField()  # +ve or -ve
+    transaction_type = models.CharField(max_length=32, choices=TRANSACTION_TYPE_CHOICES, default='adjust')
+    cost_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    sale_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    reference = models.CharField(max_length=255, null=True, blank=True)  # e.g. invoice id
+    reason = models.CharField(max_length=255, blank=True)
+    external_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    created_by_id = models.UUIDField(null=True, blank=True)
+    created_by_username = models.CharField(max_length=150, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    class Meta:
+        indexes = [
+            models.Index(fields=['external_id']),
+        ]
     def __str__(self): return f'{self.change} on {self.stock.id}'
 
 class InventoryChangeRequest(models.Model):

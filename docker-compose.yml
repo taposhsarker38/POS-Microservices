@@ -6,6 +6,15 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
+  # auth-celery:
+  #   build: ./auth-service
+  #   command: celery -A your_project_name worker --loglevel=info
+  #   depends_on:
+  #     - redis
+  #     - rabbitmq
+  #   environment:
+  #     - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+  #     - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
 
   auth-db:
     image: postgres:15

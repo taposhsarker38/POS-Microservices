@@ -17,7 +17,8 @@ class RoleSerializer(serializers.ModelSerializer):
 class AuditCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuditLog
-        fields = ['actor_id','actor_username','service','action','resource_type','resource_id','details','ip_address']
+        fields = ['id', 'actor_id','actor_username','service','action','resource_type','resource_id','details','ip_address','created_at']
+        read_only_fields = ['id','created_at']
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])

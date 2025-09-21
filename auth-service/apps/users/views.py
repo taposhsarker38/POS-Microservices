@@ -94,11 +94,12 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['role'] = role.name if role else None
         token['permissions'] = perms
         token['user_id'] = str(user.id)
+        token['company_id'] = str(user.company_id) if getattr(user,'company_id',None) else None
+        token['wing_id'] = str(user.wing_id) if getattr(user,'wing_id',None) else None
         return token
 
 class CookieTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
-    print("CookieTokenObtainPairView")
 
     def post(self, request, *args, **kwargs):
         resp = super().post(request, *args, **kwargs)

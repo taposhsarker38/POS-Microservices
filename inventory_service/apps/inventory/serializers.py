@@ -1,16 +1,18 @@
 from rest_framework import serializers
-from .models import Category, Product, Stock, StockTransaction, InventoryChangeRequest, InventoryAlert, NotificationPreference
+from .models import Category, Product, Stock, StockTransaction, InventoryChangeRequest, InventoryAlert, NotificationPreference, Batch
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = '__all__'
-
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = '__all__'
-
+class BatchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Batch
+        fields = '__all__'
 class StockSerializer(serializers.ModelSerializer):
     class Meta:
         model = Stock
