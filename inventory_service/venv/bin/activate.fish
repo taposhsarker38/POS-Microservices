@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV '/media/taposh/New Volume1/New folder (2)/POS-Microservices/inventory_service/venv'
+set -gx VIRTUAL_ENV '/mnt/01DBD436B086D330/New folder (2)/POS-Microservices/inventory_service/venv'
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/"bin $PATH

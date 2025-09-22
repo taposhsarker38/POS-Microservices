@@ -1,43 +1,83 @@
-import json, uuid, time
-import pika
+# auth_service/common/audit_publisher.py
+import json
+import logging
+import os
 from django.conf import settings
-from .middleware import get_current_request
 
-RABBITMQ_URL = getattr(settings, "RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+logger = logging.getLogger(__name__)
 
-def _get_connection():
-    params = pika.URLParameters(RABBITMQ_URL)
-    return pika.BlockingConnection(params)
+# try to import Celery task (optional). import error shouldn't break
+try:
+    from apps.common.tasks import send_audit_event_task
+    CELERY_AVAILABLE = True
+except Exception:
+    send_audit_event_task = None
+    CELERY_AVAILABLE = False
 
-def publish_audit_event(action, target_type, target_id=None, before=None, after=None, extra=None, request=None):
-    req = request or get_current_request()
-    event = {
-        "id": str(uuid.uuid4()),
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "service": getattr(settings, "SERVICE_NAME", "unknown-service"),
-        "correlation_id": getattr(req, "correlation_id", None),
-        "actor": {
-            "id": getattr(getattr(req, "user", None), "id", None),
-            "username": getattr(getattr(req, "user", None), "username", None),
-            "role": getattr(getattr(req, "user", None), "role", None),
-        },
-        "company_id": getattr(req, "company_id", None),
-        "action": action,
-        "target": {"type": target_type, "id": str(target_id) if target_id is not None else None},
-        "before": before or {},
-        "after": after or {},
-        "meta": extra or {},
-        "request": {
-            "path": getattr(req, "path", None),
-            "ip": req.META.get("HTTP_X_FORWARDED_FOR") or req.META.get("REMOTE_ADDR"),
-            "user_agent": req.META.get("HTTP_USER_AGENT")
-        }
-    }
-    body = json.dumps(event, default=str).encode("utf-8")
-    conn = _get_connection()
-    ch = conn.channel()
-    ch.exchange_declare(exchange="audit", exchange_type="fanout", durable=True)
-    ch.basic_publish(exchange="audit", routing_key="", body=body,
-                     properties=pika.BasicProperties(content_type="application/json", delivery_mode=2))
-    conn.close()
+LOCAL_FALLBACK_FILE = os.getenv('AUDIT_LOCAL_FALLBACK', '/tmp/audit_events_failed.log')
+SERVICE_NAME = getattr(settings, "SERVICE_NAME", "unknown-service")
 
+def publish_audit_event(action, target_type, target_id=None, before=None, after=None, extra=None, request=None, raw_event=None):
+    try:
+        # if caller already built event (raw_event), prefer it
+        if raw_event is not None:
+            event = raw_event
+        else:
+            req = request
+            # if request is a Django request-like or None
+            # try to extract minimal actor info safely
+            actor = {}
+            if getattr(req, 'user', None) and getattr(req.user, 'is_authenticated', False):
+                try:
+                    actor = {
+                        "id": str(getattr(req.user, 'id', None)),
+                        "username": getattr(req.user, 'username', None),
+                        "role": getattr(getattr(req.user, 'role', None), 'name', None)
+                    }
+                except Exception:
+                    actor = {"id": None, "username": None, "role": None}
+            else:
+                actor = {"id": None, "username": None, "role": None}
+
+            event = {
+                "id": str(getattr(req, "correlation_id", None) or None) or str(getattr(req, 'correlation_id', None) or __import__('uuid').uuid4()),
+                "timestamp": __import__('time').strftime("%Y-%m-%dT%H:%M:%SZ", __import__('time').gmtime()),
+                "service": SERVICE_NAME,
+                "correlation_id": getattr(req, "correlation_id", None),
+                "actor": actor,
+                "company_id": getattr(req, "company_id", None) if req is not None else None,
+                "action": action,
+                "target": {"type": target_type, "id": str(target_id) if target_id is not None else None},
+                "before": before or {},
+                "after": after or {},
+                "meta": extra or {},
+                "request": {
+                    "path": getattr(req, "path", None) if req is not None else None,
+                    "ip": (req.META.get("HTTP_X_FORWARDED_FOR") or req.META.get("REMOTE_ADDR")) if req is not None else None,
+                    "user_agent": (req.META.get("HTTP_USER_AGENT") if req is not None else None)
+                }
+            }
+
+        # enqueue to celery if available
+        if CELERY_AVAILABLE and send_audit_event_task is not None:
+            try:
+                # use apply_async (non-blocking). we serialize event to dict/json-friendly
+                send_audit_event_task.apply_async(args=[event], countdown=0)
+                logger.debug("Audit enqueued to celery: %s", event.get('action'))
+                return True
+            except Exception as e:
+                logger.exception("Failed to enqueue audit event to celery, will fallback: %s", e)
+
+        # fallback: write to local file
+        try:
+            with open(LOCAL_FALLBACK_FILE, 'a') as f:
+                f.write(json.dumps(event, default=str) + "\n")
+            logger.warning("Audit event persisted locally to %s", LOCAL_FALLBACK_FILE)
+            return True
+        except Exception as e:
+            logger.exception("Failed to persist audit event locally: %s", e)
+            return False
+
+    except Exception as e:
+        logger.exception("Unhandled exception in publish_audit_event: %s", e)
+        return False

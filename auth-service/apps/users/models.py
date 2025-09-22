@@ -14,6 +14,10 @@ class Role(models.Model):
     permissions = models.ManyToManyField(Permission, related_name='roles', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     def __str__(self): return self.name
+    def permission_codes(self):
+        if getattr(self, 'role', None):
+            return list(self.role.permissions.values_list('code', flat=True))
+        return []
 
 class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
