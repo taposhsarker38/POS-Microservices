@@ -7,6 +7,7 @@ class Company(models.Model):
     code = models.CharField(max_length=50, unique=True)
     tax_number = models.CharField(max_length=128, blank=True, null=True)
     vat_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    bin_number = models.CharField(max_length=128, blank=True, null=True)
     accounting_codes = models.JSONField(default=dict, blank=True)  # mapping: {"sales":"4000", "cogs":"5000"}
     default_payment_terms = models.CharField(max_length=255, blank=True, null=True)
     address = models.TextField(blank=True, null=True)

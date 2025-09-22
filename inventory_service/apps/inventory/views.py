@@ -1,11 +1,11 @@
 # apps/inventory/views.py
 from uuid import UUID
-
+from decimal import Decimal
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import F
-
+from rest_framework.views import APIView
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -13,12 +13,14 @@ from rest_framework.response import Response
 
 from .models import (
     Category, Product, Batch, Stock, StockTransaction,
-    InventoryChangeRequest, InventoryAlert, NotificationPreference
+    InventoryChangeRequest,  Supplier, ProductSupplier, PurchaseOrder, PurchaseOrderLine,
+    PurchaseReceipt, PurchaseReceiptLine, AccountingJournal, Stock, StockTransaction, Batch, Product,BillOfMaterial, BOMLine, ProductionOrder
 )
 from .serializers import (
     CategorySerializer, ProductSerializer, BatchSerializer,
     StockSerializer, StockTransactionSerializer,
-    InventoryChangeRequestSerializer, InventoryChangeRequestCreateSerializer
+    InventoryChangeRequestSerializer, InventoryChangeRequestCreateSerializer,SupplierSerializer, ProductSupplierSerializer,
+    PurchaseOrderSerializer, PurchaseReceiptSerializer, AccountingJournalSerializer,BillOfMaterialSerializer,  ProductionOrderSerializer
 )
 from .permissions import HasPermission, IsRequesterOrApproverOrReadOnly
 from .utils import publish_audit, token_has_permission
@@ -615,3 +617,287 @@ class InventoryChangeRequestViewSet(viewsets.ModelViewSet):
             user_id = getattr(self.request.user, 'id', None)
             qs = qs.filter(requested_by_id=user_id)
         return qs
+
+class SupplierViewSet(viewsets.ModelViewSet):
+    queryset = Supplier.objects.all().order_by('name')
+    serializer_class = SupplierSerializer
+    permission_classes = [IsAuthenticated, HasPermission]
+
+
+class ProductSupplierViewSet(viewsets.ModelViewSet):
+    queryset = ProductSupplier.objects.all()
+    serializer_class = ProductSupplierSerializer
+    permission_classes = [IsAuthenticated, HasPermission]
+
+
+class PurchaseOrderViewSet(viewsets.ModelViewSet):
+    queryset = PurchaseOrder.objects.all().order_by('-created_at')
+    serializer_class = PurchaseOrderSerializer
+    permission_classes = [IsAuthenticated, HasPermission]
+
+    @action(detail=True, methods=['post'], url_path='mark-ordered')
+    def mark_ordered(self, request, pk=None):
+        po = self.get_object()
+        if po.status != PurchaseOrder.STATUS_DRAFT:
+            return Response({'detail': 'po already ordered or cancelled'}, status=400)
+        po.status = PurchaseOrder.STATUS_ORDERED
+        po.ordered_at = timezone.now()
+        po.save()
+        publish_audit({'actor_id': str(getattr(request.user,'id',None)), 'service':'inventory-service','action':'po.ordered','resource_id':str(po.id),'details':{}})
+        return Response({'detail':'marked ordered'}, status=200)
+
+
+# Core: process purchase receipt
+def process_purchase_receipt(receipt: PurchaseReceipt, user=None):
+    created_txs = []
+    with transaction.atomic():
+        for line in receipt.lines.select_related('product'):
+            product = line.product
+            qty = int(line.qty_received)
+            unit_cost = Decimal(line.unit_cost or 0)
+            batch_obj = None
+
+            # enforce batch for batch-tracked products
+            if product.is_batch_tracked:
+                if not line.batch_no:
+                    raise ValueError('batch_no required for batch tracked product: %s' % product.id)
+                batch_obj, _ = Batch.objects.get_or_create(
+                    product=product, batch_no=line.batch_no,
+                    defaults={'expiry_date': line.expiry_date, 'cost_price': unit_cost, 'qty': 0}
+                )
+                # increment batch qty
+                Batch.objects.filter(id=batch_obj.id).update(qty=F('qty') + qty)
+                batch_obj.refresh_from_db()
+
+            # get/create stock row
+            stock, _ = Stock.objects.select_for_update().get_or_create(
+                product=product, company_id=receipt.company_id, wing_id=receipt.wing_id, batch=batch_obj,
+                defaults={'qty': 0, 'reserved': 0}
+            )
+
+            # idempotency check (line-level external_id preferred)
+            ext = line.external_id or receipt.external_id
+            if ext and StockTransaction.objects.filter(external_id=ext).exists():
+                tx = StockTransaction.objects.filter(external_id=ext).first()
+                created_txs.append(tx)
+                continue
+
+            # increase stock
+            Stock.objects.filter(id=stock.id).update(qty=F('qty') + qty)
+            stock.refresh_from_db()
+
+            # create transaction
+            tx = StockTransaction.objects.create(
+                stock=stock,
+                change=qty,
+                transaction_type='purchase',
+                cost_price=unit_cost,
+                sale_price=None,
+                reference=str(receipt.id),
+                reason='purchase_receipt',
+                external_id=ext,
+                created_by_id=getattr(user, 'id', None),
+                created_by_username=getattr(user, 'username', None)
+            )
+            created_txs.append(tx)
+
+            # update ProductSupplier.last_cost if mapping exists
+            ps = ProductSupplier.objects.filter(product=product, supplier=receipt.supplier).first()
+            if ps:
+                ps.last_cost = unit_cost
+                ps.save()
+
+            # simple accounting journal (demo)
+            journal_entry = {
+                'date': timezone.now().isoformat(),
+                'type': 'purchase_receipt',
+                'reference': str(receipt.id),
+                'lines': [
+                    {'account': 'inventory', 'debit': float(unit_cost * qty), 'credit': 0},
+                    {'account': 'accounts_payable', 'debit': 0, 'credit': float(unit_cost * qty)},
+                ]
+            }
+            AccountingJournal.objects.create(company_id=receipt.company_id, wing_id=receipt.wing_id, entry=journal_entry)
+
+            # audit & notifications
+            publish_audit({
+                'actor_id': str(getattr(user, 'id', None)),
+                'actor_username': getattr(user, 'username', None),
+                'service': 'inventory-service',
+                'action': 'purchase.receipt.processed',
+                'resource_type': 'purchase_receipt',
+                'resource_id': str(receipt.id),
+                'details': {'product': str(product.id), 'qty': qty, 'unit_cost': str(unit_cost), 'stock_id': str(stock.id)},
+                'ip_address': ''
+            })
+            try:
+                check_and_notify_low_stock(stock)
+            except Exception:
+                pass
+
+    return created_txs
+
+
+class PurchaseReceiptViewSet(viewsets.ModelViewSet):
+    queryset = PurchaseReceipt.objects.all().order_by('-created_at')
+    serializer_class = PurchaseReceiptSerializer
+    permission_classes = [IsAuthenticated, HasPermission]
+
+    def perform_create(self, serializer):
+        receipt = serializer.save()
+        # process receipt (this function is transactional)
+        try:
+            process_purchase_receipt(receipt, user=self.request.user)
+        except Exception:
+            # re-raise so that client sees error and developer can fix
+            raise
+
+    @action(detail=True, methods=['post'], url_path='process')
+    def process(self, request, pk=None):
+        receipt = self.get_object()
+        try:
+            txs = process_purchase_receipt(receipt, user=request.user)
+        except ValueError as e:
+            return Response({'detail': str(e)}, status=400)
+        return Response({'detail': 'processed', 'transactions': [str(t.id) for t in txs]}, status=200)
+
+
+# --- BOM & Production views ---
+class BillOfMaterialViewSet(viewsets.ModelViewSet):
+    queryset = BillOfMaterial.objects.all().order_by('-created_at')
+    serializer_class = BillOfMaterialSerializer
+    permission_classes = [IsAuthenticated, HasPermission]
+
+
+class ProductionOrderViewSet(viewsets.ModelViewSet):
+    queryset = ProductionOrder.objects.all().order_by('-created_at')
+    serializer_class = ProductionOrderSerializer
+    permission_classes = [IsAuthenticated, HasPermission]
+
+    @action(detail=True, methods=['post'], url_path='start')
+    def start(self, request, pk=None):
+        po = self.get_object()
+        if po.status != 'draft' and po.status != 'planned':
+            return Response({'detail': 'cannot start from current status'}, status=400)
+        po.status = 'in_progress'
+        po.save()
+        publish_audit({'actor_id': str(getattr(request.user,'id',None)), 'service':'inventory-service','action':'production.started','resource_id':str(po.id),'details':{}})
+        return Response({'detail':'started'})
+
+    @action(detail=True, methods=['post'], url_path='complete')
+    def complete(self, request, pk=None):
+        po = self.get_object()
+        if po.status != 'in_progress':
+            return Response({'detail': 'production not in progress'}, status=400)
+
+        # perform consumption & production: consume BOM components, create finished stock
+        with transaction.atomic():
+            bom = po.bom
+            product_finished = bom.product
+            total_qty = po.qty_to_produce
+
+            # consume each BOM line
+            for line in bom.lines.select_related('component'):
+                comp = line.component
+                required_qty = line.qty * total_qty
+
+                # find stock rows (prefer available stock without batch filtering) and consume using FIFO style (simple)
+                # we'll just consume from any stock rows ordering by updated_at asc
+                needed = required_qty
+                stocks = Stock.objects.select_for_update().filter(product=comp).order_by('updated_at')
+                for s in stocks:
+                    avail = s.qty - s.reserved
+                    if avail <= 0:
+                        continue
+                    take = min(avail, needed)
+                    s.qty = F('qty') - take
+                    s.save()
+                    s.refresh_from_db()
+
+                    # create transaction for consumption
+                    StockTransaction.objects.create(
+                        stock=s,
+                        change=-take,
+                        transaction_type='adjust',
+                        reason=f'production_consume:{po.id}',
+                        created_by_id=getattr(request.user, 'id', None),
+                        created_by_username=getattr(request.user, 'username', None)
+                    )
+                    needed -= take
+                    if needed <= 0:
+                        break
+                if needed > 0:
+                    raise ValueError(f'Insufficient component stock for {comp.id}, need {required_qty}, missing {needed}')
+
+            # create/increment finished goods stock
+            fg_stock, _ = Stock.objects.select_for_update().get_or_create(
+                product=product_finished, company_id=po.company_id, wing_id=po.wing_id, defaults={'qty': 0, 'reserved': 0}
+            )
+            Stock.objects.filter(id=fg_stock.id).update(qty=F('qty') + total_qty)
+            fg_stock.refresh_from_db()
+
+            # create tx for finished goods
+            StockTransaction.objects.create(
+                stock=fg_stock,
+                change=total_qty,
+                transaction_type='purchase',  # or 'manufacture_produce'
+                reason=f'production_finish:{po.id}',
+                created_by_id=getattr(request.user, 'id', None),
+                created_by_username=getattr(request.user, 'username', None)
+            )
+
+            po.status = 'done'
+            po.save()
+
+        publish_audit({'actor_id': str(getattr(request.user,'id',None)), 'service':'inventory-service','action':'production.completed','resource_id':str(po.id),'details':{'qty': total_qty}})
+        return Response({'detail':'completed'})
+
+class StockLedgerView(APIView):
+    permission_classes = [IsAuthenticated, HasPermission]
+
+    def get(self, request):
+        product_id = request.query_params.get('product_id')
+        company_id = request.query_params.get('company_id')
+        wing_id = request.query_params.get('wing_id')
+        start = request.query_params.get('start')
+        end = request.query_params.get('end')
+
+        qs = StockTransaction.objects.select_related('stock__product')
+
+        if product_id:
+            qs = qs.filter(stock__product_id=product_id)
+        if company_id:
+            qs = qs.filter(stock__company_id=company_id)
+        if wing_id:
+            qs = qs.filter(stock__wing_id=wing_id)
+        if start:
+            qs = qs.filter(created_at__gte=start)
+        if end:
+            qs = qs.filter(created_at__lte=end)
+
+        rows = []
+        balance_qty = 0
+        balance_value = Decimal('0.00')
+
+        for tx in qs.order_by('created_at', 'id'):
+            in_qty = tx.change if tx.change > 0 else 0
+            out_qty = -tx.change if tx.change < 0 else 0
+            unit_cost = tx.cost_price or Decimal('0.00')
+            total_cost = (unit_cost * in_qty) if in_qty else (unit_cost * out_qty if out_qty else Decimal('0.00'))
+            balance_qty += tx.change
+            balance_value += (unit_cost * Decimal(tx.change))
+
+            rows.append({
+                'date': tx.created_at.isoformat(),
+                'tx_id': str(tx.id),
+                'tx_type': tx.transaction_type,
+                'reference': tx.reference,
+                'in_qty': int(in_qty),
+                'out_qty': int(out_qty),
+                'unit_cost': str(unit_cost),
+                'total_cost': float(total_cost),
+                'balance_qty': int(balance_qty),
+                'balance_value': float(balance_value)
+            })
+
+        return Response({'rows': rows})
