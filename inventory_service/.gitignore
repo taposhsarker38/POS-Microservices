@@ -1,6 +1,6 @@
 __pycache__/
 *.pyc
-.env
+
 *.sqlite3
 db_auth_data/
 .vscode/
