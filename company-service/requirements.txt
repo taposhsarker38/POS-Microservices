@@ -6,3 +6,4 @@ python-dotenv==1.0.1
 django-cors-headers==4.0.0
 drf-spectacular
 pillow
+redis>=4.6.0

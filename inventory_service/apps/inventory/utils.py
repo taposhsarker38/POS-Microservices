@@ -28,3 +28,5 @@ def token_has_permission(request, perm_code: str) -> bool:
         return perm_code in perms
     except Exception:
         return False
+
+

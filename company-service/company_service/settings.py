@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import timedelta
-
+REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR.parent / '.env')
 

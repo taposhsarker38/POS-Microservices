@@ -93,6 +93,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         perms = list(role.permissions.values_list('code', flat=True)) if role else []
         token['role'] = role.name if role else None
         token['permissions'] = perms
+        token['username'] = user.username
         token['user_id'] = str(user.id)
         token['company_id'] = str(user.company_id) if getattr(user,'company_id',None) else None
         token['wing_id'] = str(user.wing_id) if getattr(user,'wing_id',None) else None

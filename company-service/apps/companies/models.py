@@ -3,7 +3,6 @@ from decimal import Decimal
 from django.db import models
 from django.utils import timezone
 from django.db import transaction, connection
-
 class Company(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
@@ -20,7 +19,26 @@ class Company(models.Model):
 
     def __str__(self):
         return self.name
+class CompanySetting(models.Model):
+    company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='settings')
+    # basic branding:
+    primary_color = models.CharField(max_length=7, blank=True, null=True)   # "#0ea5a4"
+    secondary_color = models.CharField(max_length=7, blank=True, null=True)
+    accent_color = models.CharField(max_length=7, blank=True, null=True)
+    background_color = models.CharField(max_length=7, blank=True, null=True)
+    text_color = models.CharField(max_length=7, blank=True, null=True)
+    logo = models.ImageField(upload_to='company_logos/', blank=True, null=True)
+    logo_dark = models.ImageField(upload_to='company_logos/', blank=True, null=True)
+    favicon = models.ImageField(upload_to='company_icons/', blank=True, null=True)
+    # nav + feature flags + custom fields
+    nav = models.JSONField(default=list, blank=True)   # e.g. [{"name":"Dashboard","path":"/"},{...}]
+    metadata = models.JSONField(default=dict, blank=True)  # arbitrary data: fonts, layout options
+    feature_flags = models.JSONField(default=dict, blank=True)  # e.g. {"pos_enabled":true}
+    ui_schema = models.JSONField(default=dict, blank=True)  # e.g. custom form fields config
+    updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        verbose_name = 'Company Setting'
 class Wing(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(Company, related_name='wings', on_delete=models.CASCADE)

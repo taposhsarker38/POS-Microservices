@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Company, Wing, Currency, InvoiceSettings, Employee
+from .models import Company, Wing, Currency, InvoiceSettings, Employee,CompanySetting
 
 class WingSerializer(serializers.ModelSerializer):
     class Meta:
@@ -61,3 +61,14 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "photo",
         ]
         read_only_fields = ["id", "date_joined"]
+class CompanySettingSerializer(serializers.ModelSerializer):
+    logo_url = serializers.SerializerMethodField()
+    def get_logo_url(self, obj):
+        request = self.context.get('request')
+        if obj.logo:
+            return request.build_absolute_uri(obj.logo.url)
+        return None
+
+    class Meta:
+        model = CompanySetting
+        fields = ['primary_color','secondary_color','accent_color','background_color','text_color','logo_url','nav','feature_flags','ui_schema','metadata','updated_at']

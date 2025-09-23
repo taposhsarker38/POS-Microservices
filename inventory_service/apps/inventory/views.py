@@ -79,13 +79,6 @@ class StockViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'], url_path='initialize')
     def initialize(self, request):
-        """
-        Initialize single or multiple stock entries.
-        Accept either:
-        - single item fields (product_id, company_id, wing_id, qty, external_id, batch_no ...)
-        OR
-        - {"items": [ { ... }, ... ] }
-        """
         payload_items = request.data.get('items')
         if payload_items is None:
             payload_items = [request.data]
