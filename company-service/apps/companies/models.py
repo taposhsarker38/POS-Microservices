@@ -19,6 +19,20 @@ class Company(models.Model):
 
     def __str__(self):
         return self.name
+class NavigationItem(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(Company, related_name='nav_items', on_delete=models.CASCADE)
+    parent = models.ForeignKey('self', null=True, blank=True, related_name='children', on_delete=models.CASCADE)
+    title = models.CharField(max_length=200)
+    path = models.CharField(max_length=400, blank=True, null=True)
+    order = models.IntegerField(default=0)
+    permission_code = models.CharField(max_length=200, blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ['order']
+    def __str__(self):
+        return f"{self.company_id} - {self.title}"
 class CompanySetting(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name='settings')
     # basic branding:

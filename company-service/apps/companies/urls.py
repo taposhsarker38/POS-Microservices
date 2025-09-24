@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework import routers
-from .views import CompanyViewSet, WingViewSet, CurrencyViewSet, InvoiceSettingsViewSet, EmployeeViewSet, AuthWebhookAPIView,CompanySettingViewSet
+from .views import CompanyViewSet, WingViewSet, CurrencyViewSet, InvoiceSettingsViewSet, EmployeeViewSet, AuthWebhookAPIView,CompanySettingViewSet,CompanyNavView
 
 router = routers.DefaultRouter()
 router.register(r'companies', CompanyViewSet)
@@ -13,4 +13,5 @@ urlpatterns = [
     path('', include(router.urls)),
     path("api/webhooks/auth/", AuthWebhookAPIView.as_view(), name="auth-webhook"),
     path('companies/<uuid:pk>/settings/', CompanySettingViewSet.as_view({'get':'settings','put':'update_settings'}), name='company-settings'),
+    path('companies/<uuid:pk>/nav/', CompanyNavView.as_view(), name='company-nav'),
 ]

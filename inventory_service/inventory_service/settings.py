@@ -128,6 +128,8 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     'ALGORITHM': os.getenv('JWT_ALGORITHM','HS256'),
     'SIGNING_KEY': os.getenv('JWT_SECRET','supersecretjwtkey'),  # must match auth-service in dev
+    'USER_ID_CLAIM': 'user_id',
+    'USER_ID_FIELD': 'id',
 }
 
 

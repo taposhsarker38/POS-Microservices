@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Company, Wing, Currency, InvoiceSettings, Employee
+from .models import Company, Wing, Currency, InvoiceSettings, Employee,NavigationItem
 
 admin.site.register(Company)
 admin.site.register(Wing)
@@ -20,3 +20,9 @@ class InvoiceSettingsAdmin(admin.ModelAdmin):
 class EmployeeAdmin(admin.ModelAdmin):
     list_display = ("employee_code", "first_name", "last_name", "company", "role", "is_active")
     search_fields = ("employee_code", "first_name", "last_name", "email")
+
+@admin.register(NavigationItem)
+class NavigationItemAdmin(admin.ModelAdmin):
+    list_display = ('title','company','path','permission_code','order')
+    list_filter = ('company',)
+    search_fields = ('title','path','permission_code')

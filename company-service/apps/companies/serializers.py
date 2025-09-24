@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Company, Wing, Currency, InvoiceSettings, Employee,CompanySetting
+from .models import Company, Wing, Currency, InvoiceSettings, Employee,CompanySetting,NavigationItem
 
 class WingSerializer(serializers.ModelSerializer):
     class Meta:
@@ -72,3 +72,12 @@ class CompanySettingSerializer(serializers.ModelSerializer):
     class Meta:
         model = CompanySetting
         fields = ['primary_color','secondary_color','accent_color','background_color','text_color','logo_url','nav','feature_flags','ui_schema','metadata','updated_at']
+
+class NavigationItemSerializer(serializers.ModelSerializer):
+    children = serializers.SerializerMethodField()
+    class Meta:
+        model = NavigationItem
+        fields = ['id','company','parent','title','path','order','permission_code','metadata','children']
+    def get_children(self,obj):
+        qs = obj.children.order_by('order')
+        return NavigationItemSerializer(qs,many=True,context=self.context).data

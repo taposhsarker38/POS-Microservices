@@ -51,7 +51,7 @@ export default function LoginPage() {
 
       // optionally fetch whoami to populate user state
       try {
-        const who = await api.get(`${process.env.NEXT_PUBLIC_INVENTORY_URL}/api/v1/whoami/`)
+        const who = await api.get(`${process.env.NEXT_PUBLIC_AUTH_URL}/api/v1/whoami/`)
         dispatch(setUser(who.data))
       } catch (e) {
         // best-effort; not fatal

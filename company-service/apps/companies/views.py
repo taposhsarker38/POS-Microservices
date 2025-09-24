@@ -10,12 +10,18 @@ import hashlib
 import json
 import uuid
 from rest_framework.permissions import IsAuthenticated
-from .models import Company, Wing, Currency, InvoiceSettings, Employee,CompanySetting
-from .serializers import CompanySerializer, WingSerializer, CurrencySerializer, InvoiceSettingsSerializer, EmployeeSerializer,CompanySettingSerializer
+from .models import Company, Wing, Currency, InvoiceSettings, Employee,CompanySetting,NavigationItem
+from .serializers import CompanySerializer, WingSerializer, CurrencySerializer, InvoiceSettingsSerializer, EmployeeSerializer,CompanySettingSerializer,NavigationItemSerializer
 from apps.companies.permissions import HasPermission
 from apps.common.audit import build_event, publish_event
 from rest_framework import permissions
 from apps.common.cache import get_company_settings_cached, set_company_settings_cached
+
+try:
+    import redis
+    _redis = redis.StrictRedis.from_url(settings.REDIS_URL) if getattr(settings,'REDIS_URL',None) else None
+except Exception:
+    _redis = None
 class CompanyViewSet(viewsets.ModelViewSet):
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
@@ -243,3 +249,22 @@ class CompanySettingViewSet(viewsets.ViewSet):
         set_company_settings_cached(pk, ser.data, ttl=300)
 
         return Response(ser.data, status=status.HTTP_200_OK)
+    
+class CompanyNavView(APIView):
+    permission_classes = [permissions.AllowAny]
+    def get(self, request, pk):
+        company = get_object_or_404(Company, pk=pk)
+        cache_key = f"company:nav:{company.id}"
+        if _redis:
+            raw = _redis.get(cache_key)
+            if raw:
+                try:
+                    return Response(json.loads(raw), status=200)
+                except Exception:
+                    pass
+        top = NavigationItem.objects.filter(company=company, parent__isnull=True).order_by('order').prefetch_related('children')
+        ser = NavigationItemSerializer(top, many=True, context={'request':request})
+        data = ser.data
+        if _redis:
+            _redis.setex(cache_key, 300, json.dumps(data, default=str))
+        return Response(data, status=200)
