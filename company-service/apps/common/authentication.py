@@ -21,10 +21,6 @@ class RemoteUser(SimpleNamespace):
 
 
 class JWTAuthenticationNoDB(authentication.BaseAuthentication):
-    """
-    Validate JWT signature via TokenBackend and return (RemoteUser, validated_token)
-    so request.user and request.auth are both available.
-    """
     def authenticate(self, request):
         header = authentication.get_authorization_header(request).split()
         if not header:

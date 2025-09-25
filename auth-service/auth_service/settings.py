@@ -121,7 +121,12 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '20/min',
         'user': '1000/day',
-    }
+    },
+    'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
+    # optional: schema for drf-spectacular
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Format suffix param name default
+    'FORMAT_SUFFIX_KWARG': 'format',
 }
 
 # Cookie settings (for refresh cookie)

@@ -202,53 +202,39 @@ class AuthWebhookAPIView(APIView):
 
         return Response({"detail": "event not handled"}, status=status.HTTP_200_OK)
 
+
 class CompanySettingViewSet(viewsets.ViewSet):
-    """
-    GET  /api/v1/companies/{pk}/settings/    -> public read (cached)
-    PUT  /api/v1/companies/{pk}/settings/    -> protected (admins) update (invalidate cache)
-    """
-    # public read allowed, writes should be protected by custom permission or IsAuthenticated
     def get_permissions(self):
-        # allow anyone to GET settings, but require auth for modify operations
-        if self.action in ('retrieve', 'settings'):
+        if self.action in ('retrieve', 'company_settings'):
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
-
-    @action(detail=True, methods=['get'], url_path='settings', name='company-settings')
-    def settings(self, request, pk=None):
-        # try cache first
-        cached = get_company_settings_cached(pk)
-        if cached:
-            return Response(cached, status=status.HTTP_200_OK)
-
-        # fallback: fetch from DB
+    
+    @action(detail=True, methods=['get', 'put'], url_path='settings')
+    def company_settings(self, request, pk=None):
         company = get_object_or_404(Company, pk=pk)
         settings_obj, _ = CompanySetting.objects.get_or_create(company=company)
-        ser = CompanySettingSerializer(settings_obj, context={'request': request})
-        data = ser.data
+        
+        if request.method == 'GET':
+            # Handle GET request
+            cached = get_company_settings_cached(pk)
+            if cached:
+                return Response(cached, status=status.HTTP_200_OK)
+            
+            ser = CompanySettingSerializer(settings_obj, context={'request': request})
+            data = ser.data
+            set_company_settings_cached(pk, data, ttl=300)
+            return Response(data, status=status.HTTP_200_OK)
+        
+        elif request.method == 'PUT':
+            # Handle PUT request
+            if not request.user or not getattr(request.user, 'is_authenticated', False):
+                return Response({'detail': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # set cache (best-effort)
-        set_company_settings_cached(pk, data, ttl=300)  # 5 minutes
-        return Response(data, status=status.HTTP_200_OK)
-
-    # Optional: allow update via PUT (secure this in production)
-    @action(detail=True, methods=['put'], url_path='settings', name='company-settings-update')
-    def update_settings(self, request, pk=None):
-        # restrict: only authenticated + with permission (e.g., company.admin)
-        # Here you can add custom permission checks (role/permissions)
-        if not request.user or not getattr(request.user, 'is_authenticated', False):
-            return Response({'detail':'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        company = get_object_or_404(Company, pk=pk)
-        settings_obj, _ = CompanySetting.objects.get_or_create(company=company)
-        ser = CompanySettingSerializer(settings_obj, data=request.data, partial=True, context={'request': request})
-        ser.is_valid(raise_exception=True)
-        ser.save()
-
-        # invalidate cache by deleting key (or reset with new data)
-        set_company_settings_cached(pk, ser.data, ttl=300)
-
-        return Response(ser.data, status=status.HTTP_200_OK)
+            ser = CompanySettingSerializer(settings_obj, data=request.data, partial=True, context={'request': request})
+            ser.is_valid(raise_exception=True)
+            ser.save()
+            set_company_settings_cached(pk, ser.data, ttl=300)
+            return Response(ser.data, status=status.HTTP_200_OK)
     
 class CompanyNavView(APIView):
     permission_classes = [permissions.AllowAny]

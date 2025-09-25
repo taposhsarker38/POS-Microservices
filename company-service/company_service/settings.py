@@ -1,4 +1,6 @@
 import os
+APPEND_SLASH = False
+
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import timedelta

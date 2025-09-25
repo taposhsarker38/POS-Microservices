@@ -1,8 +1,9 @@
 from django.contrib import admin
-from .models import Company, Wing, Currency, InvoiceSettings, Employee,NavigationItem
+from .models import Company, Wing, Currency, InvoiceSettings, Employee,NavigationItem,CompanySetting
 
 admin.site.register(Company)
 admin.site.register(Wing)
+admin.site.register(CompanySetting)
 @admin.register(Currency)
 class CurrencyAdmin(admin.ModelAdmin):
     list_display = ("code", "name", "symbol", "exchange_rate", "is_base")

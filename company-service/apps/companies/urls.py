@@ -4,6 +4,7 @@ from .views import CompanyViewSet, WingViewSet, CurrencyViewSet, InvoiceSettings
 
 router = routers.DefaultRouter()
 router.register(r'companies', CompanyViewSet)
+router.register(r'companies-settings-view', CompanySettingViewSet, basename='company-settings-view')
 router.register(r'wings', WingViewSet)
 router.register(r"currencies", CurrencyViewSet, basename="currency")
 router.register(r"invoice-settings", InvoiceSettingsViewSet, basename="invoice-settings")
@@ -12,6 +13,6 @@ router.register(r"employees", EmployeeViewSet, basename="employee")
 urlpatterns = [
     path('', include(router.urls)),
     path("api/webhooks/auth/", AuthWebhookAPIView.as_view(), name="auth-webhook"),
-    path('companies/<uuid:pk>/settings/', CompanySettingViewSet.as_view({'get':'settings','put':'update_settings'}), name='company-settings'),
+    path('companies/<uuid:pk>/settings/', CompanySettingViewSet.as_view({'get':'settings','put':'update_settings'}), name='company-settings-view'),
     path('companies/<uuid:pk>/nav/', CompanyNavView.as_view(), name='company-nav'),
 ]

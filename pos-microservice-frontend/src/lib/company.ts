@@ -23,7 +23,7 @@
 export async function fetchCompanySettings(companyId: string | undefined) {
   const base = process.env.NEXT_PUBLIC_COMPANY_URL
   if (!companyId) return null
-  const res = await fetch(`${base}/api/v1/companies/${companyId}/settings/`, { cache: 'force-cache', next: { revalidate: 60 } })
+  const res = await fetch(`${base}/api/v1/companies-settings-view/${companyId}/settings/`, { cache: 'force-cache', next: { revalidate: 60 } })
   if (!res.ok) return null
   return res.json()
 }
