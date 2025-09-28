@@ -31,18 +31,36 @@ class WhoAmIView(APIView):
 
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
+
     def post(self, request):
         email = request.data.get('email')
         if not email:
-            return Response({'detail':'email required'}, status=400)
+            return Response({'detail': 'email required'}, status=400)
+
         qs = User.objects.filter(email__iexact=email)
         if qs.exists():
             user = qs.first()
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
-            reset_url = f"{request.scheme}://{request.get_host()}/auth/reset?uid={uid}&token={token}"
-            send_mail("Password reset", f"Click link: {reset_url}", settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
-        return Response({'detail':'If that email exists, reset link sent.'})
+
+            # Use FRONTEND_URL (fallback to request host if not set)
+            frontend_base = getattr(settings, "FRONTEND_URL", None)
+            if not frontend_base:
+                # fallback (rare) — keep original behavior
+                frontend_base = f"{request.scheme}://{request.get_host()}"
+
+            # Build frontend reset url — ensure proper path on frontend
+            reset_path = f"/auth/reset"  # frontend route that accepts uid & token as query params
+            reset_url = f"{frontend_base.rstrip('/')}{reset_path}?uid={uid}&token={token}"
+
+            # Send email (consider HTML email in production)
+            subject = "Password reset"
+            message = f"Click the link to reset your password: {reset_url}"
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
+
+        # Always return the same response to avoid revealing account existence
+        return Response({'detail': 'If that email exists, reset link sent.'})
+
 
 class PasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
