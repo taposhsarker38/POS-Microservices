@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework import routers
-from .views import PermissionViewSet, RoleViewSet, AuditCreateView, CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView, MeView, RegisterView, VerifyEmailView, MakeServiceTokenView
+from .views import PermissionViewSet, RoleViewSet, AuditCreateView, CookieTokenObtainPairView, CookieTokenRefreshView, LogoutView, MeView, RegisterView, VerifyEmailView, MakeServiceTokenView, UserPreferencesView
 from .views_misc import WhoAmIView, PasswordResetRequestView, PasswordResetConfirmView, ChangePasswordView, AdminCreateUserView
 
 router = routers.DefaultRouter()
@@ -22,4 +22,5 @@ urlpatterns = [
     path('password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('change-password/', ChangePasswordView.as_view(), name='change_password'),
     path('admin/create-user/', AdminCreateUserView.as_view(), name='admin_create_user'),
+    path('preferences/', UserPreferencesView.as_view(), name='user-preferences'),
 ]

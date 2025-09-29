@@ -1,6 +1,6 @@
 import axios, { AxiosHeaders } from 'axios'
 import store from '../store'
-import { setAccessToken, clearAuth } from '../store/authSlice'
+import { setAccessToken, clearAuth } from '../store/slices/authSlice'
 
 const AUTH_BASE = process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:8001'
 const api = axios.create({ timeout: 15000 })

@@ -5,8 +5,8 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import Permission, Role, AuditLog, User
-from .serializers import PermissionSerializer, RoleSerializer, AuditCreateSerializer, RegisterSerializer, UserSerializer
+from .models import Permission, Role, AuditLog, User, UserPreference
+from .serializers import PermissionSerializer, RoleSerializer, AuditCreateSerializer, RegisterSerializer, UserSerializer, PreferencesSerializer
 from django.core import signing
 from django.core.mail import send_mail
 from django.urls import reverse
@@ -163,3 +163,38 @@ class MakeServiceTokenView(APIView):
             u.set_password(password); u.save()
         refresh = RefreshToken.for_user(u)
         return Response({'access':str(refresh.access_token),'refresh':str(refresh)} , status=201)
+
+class UserPreferencesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            pref = request.user.preference
+            data = {
+                "accent": pref.accent,
+                "dark_mode": pref.dark_mode,
+                "collapsed_sidebar": pref.collapsed_sidebar
+            }
+        except UserPreference.DoesNotExist:
+            data = {"accent": "#6366F1", "dark_mode": False, "collapsed_sidebar": False}
+        return Response(data)
+
+    def post(self, request):
+        serializer = PreferencesSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        pref, created = None, False
+        try:
+            pref = request.user.preference
+        except UserPreference.DoesNotExist:
+            pref = UserPreference.objects.create(user=request.user)
+            created = True
+        pref.accent = data.get('accent', pref.accent)
+        pref.dark_mode = data.get('dark_mode', pref.dark_mode)
+        pref.collapsed_sidebar = data.get('collapsed_sidebar', pref.collapsed_sidebar)
+        pref.save()
+        return Response({"ok": True, "prefs": {
+            "accent": pref.accent,
+            "dark_mode": pref.dark_mode,
+            "collapsed_sidebar": pref.collapsed_sidebar
+        }})

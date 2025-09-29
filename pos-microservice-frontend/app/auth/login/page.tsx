@@ -9,7 +9,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import api from "../../../src/lib/api";
 import { useDispatch } from "react-redux";
-import { setAccessToken, setUser } from "../../../src/store/authSlice";
+import { setAccessToken, setUser } from "../../../src/store/slices/authSlice";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
 import Link from "next/link";
