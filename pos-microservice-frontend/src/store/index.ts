@@ -1,16 +1,26 @@
-import { configureStore } from '@reduxjs/toolkit'
-import { useDispatch } from 'react-redux'
-import authReducer from './slices/authSlice'
-import navReducer from './slices/navSlice'
-import prefsReducer from './slices/prefsSlice'
-const store = configureStore({ reducer: { 
-    nav: navReducer, 
-    prefs: prefsReducer, 
-    auth: authReducer 
+import { configureStore } from '@reduxjs/toolkit';
+import authReducer from '@/features/auth/slice';
+import { authApi } from '@/features/auth/api';
+import { usersApi } from '@/features/users/api';
+import { settingsApi } from '@/features/settings/api';
+
+export const makeStore = () => {
+  return configureStore({
+    reducer: {
+      auth: authReducer,
+      [authApi.reducerPath]: authApi.reducer,
+      [usersApi.reducerPath]: usersApi.reducer,
+      [settingsApi.reducerPath]: settingsApi.reducer,
     },
-    devTools: true,
-})
-export type RootState = ReturnType<typeof store.getState>
-export type AppDispatch = typeof store.dispatch
-export const useAppDispatch = () => useDispatch<AppDispatch>()
-export default store
+    middleware: (getDefaultMiddleware) =>
+      getDefaultMiddleware().concat(
+        authApi.middleware,
+        usersApi.middleware,
+        settingsApi.middleware
+      ),
+  });
+};
+
+export type AppStore = ReturnType<typeof makeStore>;
+export type RootState = ReturnType<AppStore['getState']>;
+export type AppDispatch = AppStore['dispatch'];

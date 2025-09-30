@@ -1,64 +1,121 @@
-// src/providers/WebSocketProvider.tsx
-'use client'
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
+// providers/WebSocketProvider.tsx
+'use client';
 
-const WS_URL = (process.env.NEXT_PUBLIC_WS_URL) || '' // e.g. wss://example.com/ws/
-type Handler = (data:any)=>void
+import React, { createContext, useContext, useEffect, useRef, useCallback, useState } from 'react';
+import { useAppSelector } from '@/store/hooks';
+import { selectAccessToken } from '@/store/slices/slice';
 
-const WebsocketContext = createContext<{ send:(msg:any)=>void, subscribe:(ev:string, h:Handler)=>()=>void }>({
-  send: ()=>{},
-  subscribe: ()=> ()=>{}
-})
+interface WebSocketContextType {
+  socket: WebSocket | null;
+  isConnected: boolean;
+  subscribe: (event: string, callback: (data: any) => void) => () => void;
+  emit: (event: string, data: any) => void;
+}
 
-export function useWebsocket() { return useContext(WebsocketContext) }
+const WebSocketContext = createContext<WebSocketContextType>({
+  socket: null,
+  isConnected: false,
+  subscribe: () => () => {},
+  emit: () => {},
+});
 
-export default function WebSocketProvider({ children } : { children: React.ReactNode }) {
-  const wsRef = useRef<WebSocket|null>(null)
-  const handlers = useRef<Record<string, Handler[]>>({})
-  const [connected, setConnected] = useState(false)
-  const retry = useRef(0)
-  const maxRetry = 10
+export const useWebSocket = () => useContext(WebSocketContext);
+
+export function WebSocketProvider({ children }: { children: React.ReactNode }) {
+  const socketRef = useRef<WebSocket | null>(null);
+  const eventHandlersRef = useRef<Map<string, ((data: any) => void)[]>>(new Map());
+  const [isConnected, setIsConnected] = useState(false);
+  const token = useAppSelector(selectAccessToken);
+
+  const connect = useCallback(() => {
+    if (!token || socketRef.current) return;
+
+    try {
+      const wsUrl = process.env.NEXT_PUBLIC_WS_URL;
+      if (!wsUrl) {
+        console.warn('WebSocket URL not configured');
+        return;
+      }
+
+      const socket = new WebSocket(`${wsUrl}?token=${token}`);
+      
+      socket.onopen = () => {
+        setIsConnected(true);
+        console.log('WebSocket connected');
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          const handlers = eventHandlersRef.current.get(data.event) || [];
+          handlers.forEach(handler => handler(data.payload));
+        } catch (error) {
+          console.error('WebSocket message error:', error);
+        }
+      };
+
+      socket.onclose = () => {
+        setIsConnected(false);
+        console.log('WebSocket disconnected');
+        // Auto-reconnect after delay
+        setTimeout(() => connect(), 3000);
+      };
+
+      socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      socketRef.current = socket;
+    } catch (error) {
+      console.error('WebSocket connection failed:', error);
+    }
+  }, [token]);
+
+  const subscribe = useCallback((event: string, callback: (data: any) => void) => {
+    if (!eventHandlersRef.current.has(event)) {
+      eventHandlersRef.current.set(event, []);
+    }
+    eventHandlersRef.current.get(event)!.push(callback);
+
+    return () => {
+      const handlers = eventHandlersRef.current.get(event) || [];
+      const index = handlers.indexOf(callback);
+      if (index > -1) {
+        handlers.splice(index, 1);
+      }
+    };
+  }, []);
+
+  const emit = useCallback((event: string, data: any) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ event, payload: data }));
+    }
+  }, []);
 
   useEffect(() => {
-    let mounted = true
-    function connect() {
-      if (!WS_URL) return
-      const ws = new WebSocket(WS_URL)
-      wsRef.current = ws
-      ws.onopen = () => { retry.current = 0; setConnected(true) }
-      ws.onclose = () => { setConnected(false); if (!mounted && retry.current >= maxRetry) return; const delay = Math.min(30000, 1000 * 2 ** retry.current); retry.current += 1; setTimeout(connect, delay) }
-      ws.onerror = () => { /* errors will close */ }
-      ws.onmessage = (ev) => {
-        try {
-          const payload = JSON.parse(ev.data)
-          const { type, data } = payload
-          ;(handlers.current[type]||[]).forEach(h=>h(data))
-        } catch (e) {
-          // ignore non-json
-        }
-      }
+    if (token) {
+      connect();
+    } else {
+      socketRef.current?.close();
+      socketRef.current = null;
+      setIsConnected(false);
     }
 
-    connect()
-    return () => { mounted = false; wsRef.current?.close() }
-  }, [])
+    return () => {
+      socketRef.current?.close();
+    };
+  }, [token, connect]);
 
-  function send(msg:any) {
-    try {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify(msg))
-      }
-    } catch (e) {}
-  }
-
-  function subscribe(ev:string, handler: Handler) {
-    handlers.current[ev] = [...(handlers.current[ev]||[]), handler]
-    return () => { handlers.current[ev] = (handlers.current[ev]||[]).filter(h=>h!==handler) }
-  }
+  const value = {
+    socket: socketRef.current,
+    isConnected,
+    subscribe,
+    emit,
+  };
 
   return (
-    <WebsocketContext.Provider value={{ send, subscribe }}>
+    <WebSocketContext.Provider value={value}>
       {children}
-    </WebsocketContext.Provider>
-  )
+    </WebSocketContext.Provider>
+  );
 }
