@@ -1,10 +1,13 @@
-// app/layout.tsx
+// src/app/layout.tsx
 import './globals.css';
 import { Inter } from 'next/font/google';
-import {Providers} from "@/providers/Providers"
+import { Providers } from "@/providers/Providers";
 import { env } from '@/lib/env';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap',
+});
 
 export const metadata = {
   title: 'POS System - Microservices',
@@ -17,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+    <html lang="en" className={inter.className}>
+      <body className="antialiased">
         <Providers companyId={env.companyId}>
           {children}
         </Providers>

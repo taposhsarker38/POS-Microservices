@@ -1,20 +1,7 @@
+// src/features/auth/slice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-
-interface User {
-  id: string;
-  username: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  is_active: boolean;
-  is_superuser: boolean;
-  is_staff: boolean;
-  groups: string[];
-  user_permissions: string[];
-  last_login?: string;
-  date_joined: string;
-  company?: string;
-}
+import { authApi } from './api';
+import { User } from './api';
 
 interface AuthState {
   user: User | null;
@@ -64,6 +51,34 @@ const authSlice = createSlice({
     setInitialized: (state) => {
       state.isInitialized = true;
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addMatcher(
+        authApi.endpoints.login.matchFulfilled,
+        (state, { payload }) => {
+          state.user = payload.user;
+          state.accessToken = payload.access;
+          state.refreshToken = payload.refresh;
+          state.isInitialized = true;
+        }
+      )
+      .addMatcher(
+        authApi.endpoints.getMe.matchFulfilled,
+        (state, { payload }) => {
+          state.user = payload;
+          state.isInitialized = true;
+        }
+      )
+      .addMatcher(
+        authApi.endpoints.logout.matchFulfilled,
+        (state) => {
+          state.user = null;
+          state.accessToken = null;
+          state.refreshToken = null;
+          state.isInitialized = true;
+        }
+      );
   },
 });
 

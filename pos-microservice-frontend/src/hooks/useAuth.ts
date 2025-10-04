@@ -1,13 +1,14 @@
 // src/hooks/useAuth.ts
 import { useCallback, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAppDispatch, useAppSelector } from '@/store';
+
 import { 
   selectCurrentUser, 
   selectAccessToken,
   logout 
 } from '@/features/auth/authSlice';
-import { useRefreshTokenMutation } from '@/features/auth/authApi';
+import { useRefreshTokenMutation } from '@/features/auth/api';
+import { useAppDispatch, useAppSelector } from './hooks';
 
 export const useAuth = () => {
   const dispatch = useAppDispatch();

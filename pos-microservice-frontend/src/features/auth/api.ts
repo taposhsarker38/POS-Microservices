@@ -1,7 +1,21 @@
 // features/auth/api.ts
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import { User } from '@/types';
 
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  is_active: boolean;
+  is_superuser: boolean;
+  is_staff: boolean;
+  groups: string[];
+  user_permissions: string[];
+  last_login?: string;
+  date_joined: string;
+  company?: string;
+}
 interface LoginCredentials {
   username: string;
   password: string;
@@ -49,6 +63,14 @@ export const authApi = createApi({
         method: 'POST',
       }),
     }),
+    
+    verifyToken: builder.mutation<{ valid: boolean }, string>({
+      query: (token) => ({
+        url: 'token/verify/',
+        method: 'POST',
+        body: { token },
+      }),
+    }),
   }),
 });
 
@@ -57,4 +79,5 @@ export const {
   useLogoutMutation,
   useGetMeQuery,
   useRefreshTokenMutation,
+  useVerifyTokenMutation,
 } = authApi;

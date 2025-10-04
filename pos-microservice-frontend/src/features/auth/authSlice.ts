@@ -1,6 +1,7 @@
 // src/features/auth/authSlice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { authApi } from './authApi';
+import { authApi } from './api';
+import { User } from '@/types';
 
 interface AuthState {
   user: User | null;
