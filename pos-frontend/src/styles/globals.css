@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root {
+  --primary: #0ea5e9;
+  --accent: #f97316;
+  --bg: white;
+  --fg: #0f172a;
+}
+:root[data-theme='morning'] {
+--bg: #FFFBEB;
+--fg: #0F172A;
+}
+:root[data-theme='evening'] {
+--bg: #FFF1F6;
+--fg: #0F172A;
+}
+:root[data-theme='night'] {
+--bg: #0B1220;
+--fg: #E6EEF8;
+}
+body { background: var(--bg); color: var(--fg); }

@@ -5,8 +5,8 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import Permission, Role, AuditLog, User
-from .serializers import PermissionSerializer, RoleSerializer, AuditCreateSerializer, RegisterSerializer, UserSerializer
+from .models import Permission, Role, AuditLog, User, UserPreference
+from .serializers import PermissionSerializer, RoleSerializer, AuditCreateSerializer, RegisterSerializer, UserSerializer, PreferencesSerializer
 from django.core import signing
 from django.core.mail import send_mail
 from django.urls import reverse
@@ -101,19 +101,39 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class CookieTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
-
     def post(self, request, *args, **kwargs):
         resp = super().post(request, *args, **kwargs)
-        # Set refresh in cookie (if present)
-        if resp.status_code == 200 and 'refresh' in resp.data:
-            refresh = resp.data['refresh']
-            resp.set_cookie('refresh_token', refresh, httponly=True, secure=not settings.DEBUG, samesite='Lax')
-            # keep access in body
-            resp.data = {'access': resp.data.get('access')}
+        if resp.status_code == 200:
+            access = resp.data.get('access')
+            refresh = resp.data.get('refresh')
+
+            secure_flag = not settings.DEBUG
+
+            if refresh:
+                resp.set_cookie(
+                    'refresh_token',
+                    refresh,
+                    httponly=True,
+                    secure=secure_flag,
+                    samesite='Lax',
+                    path='/'
+                )
+            if access:
+                resp.set_cookie(
+                    'access',
+                    access,
+                    httponly=True,
+                    secure=secure_flag,
+                    samesite='Lax',
+                    path='/'
+                )
+            resp.data = {'access': access}
         return resp
+
 
 class CookieTokenRefreshView(APIView):
     permission_classes = [permissions.AllowAny]
+
     def post(self, request):
         refresh = request.COOKIES.get('refresh_token')
         if not refresh:
@@ -122,12 +142,16 @@ class CookieTokenRefreshView(APIView):
             token = RefreshToken(refresh)
         except Exception:
             return Response({'detail':'Invalid refresh token.'}, status=401)
+
         new_access = str(token.access_token)
         cookie_max_age = int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds())
         secure_flag = not settings.DEBUG
+
         resp = Response({'access': new_access})
-        resp.set_cookie('refresh_token', str(token), httponly=True, secure=secure_flag, samesite='Lax', max_age=cookie_max_age)
+        resp.set_cookie('refresh_token', str(token), httponly=True, secure=secure_flag, samesite='Lax', max_age=cookie_max_age, path='/')
+        resp.set_cookie('access', new_access, httponly=True, secure=secure_flag, samesite='Lax', path='/')
         return resp
+
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
@@ -163,3 +187,38 @@ class MakeServiceTokenView(APIView):
             u.set_password(password); u.save()
         refresh = RefreshToken.for_user(u)
         return Response({'access':str(refresh.access_token),'refresh':str(refresh)} , status=201)
+
+class UserPreferencesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            pref = request.user.preference
+            data = {
+                "accent": pref.accent,
+                "dark_mode": pref.dark_mode,
+                "collapsed_sidebar": pref.collapsed_sidebar
+            }
+        except UserPreference.DoesNotExist:
+            data = {"accent": "#6366F1", "dark_mode": False, "collapsed_sidebar": False}
+        return Response(data)
+
+    def post(self, request):
+        serializer = PreferencesSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        pref, created = None, False
+        try:
+            pref = request.user.preference
+        except UserPreference.DoesNotExist:
+            pref = UserPreference.objects.create(user=request.user)
+            created = True
+        pref.accent = data.get('accent', pref.accent)
+        pref.dark_mode = data.get('dark_mode', pref.dark_mode)
+        pref.collapsed_sidebar = data.get('collapsed_sidebar', pref.collapsed_sidebar)
+        pref.save()
+        return Response({"ok": True, "prefs": {
+            "accent": pref.accent,
+            "dark_mode": pref.dark_mode,
+            "collapsed_sidebar": pref.collapsed_sidebar
+        }})

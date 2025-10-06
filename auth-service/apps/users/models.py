@@ -1,7 +1,7 @@
 import uuid
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-
+from django.conf import settings
 class Permission(models.Model):
     code = models.CharField(max_length=200, unique=True)
     description = models.TextField(blank=True)
@@ -40,3 +40,11 @@ class AuditLog(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ['-created_at']
+class UserPreference(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='preference')
+    accent = models.CharField(max_length=32, default='#6366F1')   # hex or css name
+    dark_mode = models.BooleanField(default=False)
+    collapsed_sidebar = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.user}'s prefs"

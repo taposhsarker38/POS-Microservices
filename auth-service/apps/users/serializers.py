@@ -43,3 +43,8 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id','username','email','first_name','last_name','phone','company_id','wing_id','role']
+
+class PreferencesSerializer(serializers.Serializer):
+    accent = serializers.CharField(allow_blank=True, required=False)
+    dark_mode = serializers.BooleanField(required=False)
+    collapsed_sidebar = serializers.BooleanField(required=False)
