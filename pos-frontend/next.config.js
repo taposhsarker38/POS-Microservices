@@ -8,5 +8,13 @@ module.exports = {
   images: {
     domains: ['localhost', '127.0.0.1'],
   },
-  // add any other settings you originally had in next.config.ts here
+  async rewrites() {
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: 'http://localhost:8001/api/v1/:path*', 
+      },
+    ]
+  },
+
 };

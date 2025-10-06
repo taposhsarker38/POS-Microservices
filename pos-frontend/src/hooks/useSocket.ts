@@ -2,7 +2,7 @@
 import { useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { store } from "../stores/store";
-import { apiSlice } from "../lib/apiSlice";
+import { apiSlice } from "../stores/api";
 
 export function useSocket() {
   const socketRef = useRef<Socket | null>(null);

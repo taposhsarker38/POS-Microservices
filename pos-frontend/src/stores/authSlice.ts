@@ -1,4 +1,4 @@
-// src/store/authSlice.ts
+
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 type User = { id?: string; username?:string; email?:string; role?:any; permissions?:string[]; is_superuser?:boolean } | null
 type State = { accessToken: string | null; user: User }

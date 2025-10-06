@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useWhoamiQuery } from '../lib/apiSlice';
+import { useWhoamiQuery } from '@/stores/api';
 
 
 export default function useRequireAuth() {

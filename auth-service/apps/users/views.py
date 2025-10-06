@@ -101,19 +101,39 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class CookieTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
-
     def post(self, request, *args, **kwargs):
         resp = super().post(request, *args, **kwargs)
-        # Set refresh in cookie (if present)
-        if resp.status_code == 200 and 'refresh' in resp.data:
-            refresh = resp.data['refresh']
-            resp.set_cookie('refresh_token', refresh, httponly=True, secure=not settings.DEBUG, samesite='Lax')
-            # keep access in body
-            resp.data = {'access': resp.data.get('access')}
+        if resp.status_code == 200:
+            access = resp.data.get('access')
+            refresh = resp.data.get('refresh')
+
+            secure_flag = not settings.DEBUG
+
+            if refresh:
+                resp.set_cookie(
+                    'refresh_token',
+                    refresh,
+                    httponly=True,
+                    secure=secure_flag,
+                    samesite='Lax',
+                    path='/'
+                )
+            if access:
+                resp.set_cookie(
+                    'access',
+                    access,
+                    httponly=True,
+                    secure=secure_flag,
+                    samesite='Lax',
+                    path='/'
+                )
+            resp.data = {'access': access}
         return resp
+
 
 class CookieTokenRefreshView(APIView):
     permission_classes = [permissions.AllowAny]
+
     def post(self, request):
         refresh = request.COOKIES.get('refresh_token')
         if not refresh:
@@ -122,12 +142,16 @@ class CookieTokenRefreshView(APIView):
             token = RefreshToken(refresh)
         except Exception:
             return Response({'detail':'Invalid refresh token.'}, status=401)
+
         new_access = str(token.access_token)
         cookie_max_age = int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds())
         secure_flag = not settings.DEBUG
+
         resp = Response({'access': new_access})
-        resp.set_cookie('refresh_token', str(token), httponly=True, secure=secure_flag, samesite='Lax', max_age=cookie_max_age)
+        resp.set_cookie('refresh_token', str(token), httponly=True, secure=secure_flag, samesite='Lax', max_age=cookie_max_age, path='/')
+        resp.set_cookie('access', new_access, httponly=True, secure=secure_flag, samesite='Lax', path='/')
         return resp
+
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]

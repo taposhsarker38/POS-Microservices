@@ -1,11 +1,11 @@
 'use client';
 import React from 'react';
-import { useWhoamiQuery, useLogoutMutation } from '../../lib/apiSlice';
+import { useWhoamiQuery, useLoginMutation } from '@/stores/api';
 
 
 export default function Header() {
 const { data: me } = useWhoamiQuery(undefined, { skip: false });
-const [logout] = useLogoutMutation();
+const [logout] = useLoginMutation();
 
 
 const onLogout = async () => {

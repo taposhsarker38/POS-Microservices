@@ -1,21 +1,19 @@
-// src/app/login/page.tsx
 "use client";
-
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {  useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import fetcher from "@/lib/fetcher";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { setAccessToken, setUser } from "@/stores/authSlice";
-import { apiSlice, useLoginMutation } from "@/stores/api"; // <-- useLoginMutation + apiSlice
+import { apiSlice, useLoginMutation, useWhoamiQuery } from "@/stores/api"; // <-- useLoginMutation + apiSlice
 import { useRouter, useSearchParams } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
 import Link from "next/link";
 import clsx from "clsx";
 import PasswordInput from "@/components/ui/PasswordInput";
-
+import { RootState } from "@/stores/store";
 type WeatherResp = {
   weather?: { main: string; description?: string }[];
   main?: { temp?: number; feels_like?: number };
@@ -90,7 +88,9 @@ type LoginInput = z.infer<typeof LoginSchema>;
 
 export default function LoginPage() {
   const [timeOfDay, setTimeOfDay] = useState(getTimeOfDay());
-  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(
+    null,
+  );
   const [useGeo, setUseGeo] = useState(true);
 
   const apiUrl = useMemo(() => {
@@ -121,7 +121,7 @@ export default function LoginPage() {
         () => {
           setUseGeo(false);
         },
-        { timeout: 6000 }
+        { timeout: 6000 },
       );
     } else {
       setUseGeo(false);
@@ -133,15 +133,19 @@ export default function LoginPage() {
 
   const mainWeather = data?.weather?.[0]?.main || "Clear";
   const theme = chooseTheme(mainWeather, timeOfDay);
-
-  const dispatch = useDispatch();
   const router = useRouter();
   const search = useSearchParams();
-  const nextUrl = search?.get("next") || "/";
+  const nextUrl = (search?.get("next") as string) || "/dashboard";
 
-  // RTK Query mutation hook
+  const dispatch = useDispatch();
+  const accessToken = useSelector((s: RootState) => s.auth.accessToken);
+  const shouldRunWhoami = !accessToken;
+  const {
+    data: whoamiData,
+    isLoading: whoamiLoading,
+    isSuccess: whoamiSuccess,
+  } = useWhoamiQuery(undefined, { skip: !shouldRunWhoami });
   const [login, { isLoading: loginLoading }] = useLoginMutation();
-
   const [loading, setLoading] = useState(false);
   const {
     register,
@@ -151,60 +155,62 @@ export default function LoginPage() {
     resolver: zodResolver(LoginSchema),
     defaultValues: { username: "", password: "" },
   });
+  useEffect(() => {
+    const isAuthenticated = Boolean(accessToken) || Boolean(whoamiData);
+    if (isAuthenticated) {
+      router.replace(nextUrl ?? "/dashboard");
+    }
+  }, [accessToken, whoamiData, router, nextUrl]);
 
-  const onSubmit = useCallback(
-    async (formData: LoginInput) => {
-      setLoading(true);
-      toast.dismiss();
-      const t = toast.loading("Signing in...");
+  const onSubmit = async (formData: LoginInput) => {
+    setLoading(true);
+    toast.dismiss();
+    const t = toast.loading("Signing in...");
+    try {
+      const res = await login({
+        username: formData.username,
+        password: formData.password,
+      }).unwrap();
+      const access = (res as any)?.access;
+      if (!access) throw new Error("No access token returned");
+      dispatch(setAccessToken(access));
       try {
-        // call RTK Query login mutation
-        const res = await login({
-          username: formData.username,
-          password: formData.password,
-        }).unwrap(); // unwrap will throw if error
-
-        const access = (res as any)?.access;
-        if (!access) throw new Error("No access token returned");
-
-        // save access token in redux
-        dispatch(setAccessToken(access));
-
-        // best-effort: fetch whoami via RTK Query initiate
-        try {
-          // this dispatch returns the subscription result which contains .data on success
-          const whoResult = await (dispatch as any)(
-            apiSlice.endpoints.whoami.initiate(undefined)
-          );
-
-          if (whoResult && "data" in whoResult && whoResult.data) {
-            dispatch(setUser(whoResult.data));
-          }
-        } catch (e) {
-          // non-fatal - just continue
-          console.warn("whoami failed", e);
+        const whoResult = await (dispatch as any)(
+          apiSlice.endpoints.whoami.initiate(undefined),
+        );
+        if (whoResult && "data" in whoResult && whoResult.data) {
+          dispatch(setUser(whoResult.data));
         }
-
-        toast.success("Signed in");
-        router.push(nextUrl || "/");
-      } catch (err: any) {
-        console.error("Login error", err);
-        const msg =
-          err?.data?.detail || err?.response?.data?.detail || err?.message || "Login failed";
-        toast.error(String(msg));
-      } finally {
-        setLoading(false);
-        toast.dismiss(t);
+      } catch (e) {
+        console.warn("whoami failed", e);
       }
-    },
-    [dispatch, login, router, nextUrl]
-  );
+      toast.success("Signed in");
+      router.push(nextUrl ?? "/dashboard");
+    } catch (err: any) {
+      console.error("Login error", err);
+      const msg =
+        err?.data?.detail ||
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Login failed";
+      toast.error(String(msg));
+    } finally {
+      setLoading(false);
+      toast.dismiss(t);
+    }
+  };
 
   useEffect(() => {
     const el = document.getElementById("username") as HTMLInputElement | null;
     el?.focus();
   }, []);
-
+  if (whoamiLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div>Checking session…</div>
+      </div>
+    );
+  }
   return (
     <div
       className="min-h-screen flex items-center justify-center"
@@ -241,7 +247,7 @@ export default function LoginPage() {
                 {...register("username")}
                 className={clsx(
                   "w-full px-3 py-2 text-slate-800 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary",
-                  errors.username ? "border-red-400" : "border-slate-200"
+                  errors.username ? "border-red-400" : "border-slate-200",
                 )}
                 placeholder="Username"
                 autoComplete="username"
@@ -284,8 +290,10 @@ export default function LoginPage() {
                 className={clsx(
                   theme.btn,
                   "w-full px-6 py-2 rounded-lg font-semibold shadow-lg focus:ring-4",
-                  loading || loginLoading ? "opacity-80 cursor-wait" : "hover:opacity-95",
-                  (loading || loginLoading) && "pointer-events-none"
+                  loading || loginLoading
+                    ? "opacity-80 cursor-wait"
+                    : "hover:opacity-95",
+                  (loading || loginLoading) && "pointer-events-none",
                 )}
                 aria-busy={loading || loginLoading}
               >
