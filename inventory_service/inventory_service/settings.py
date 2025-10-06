@@ -26,7 +26,6 @@ INSTALLED_APPS = [
     'rest_framework','corsheaders',
     'apps.inventory',
     'drf_spectacular',
-    # 'channels',
 ]
 
 MIDDLEWARE = [
@@ -41,15 +40,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'inventory_service.urls'
-ASGI_APPLICATION = "inventory_service.asgi.application"
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [os.environ.get("REDIS_URL", "redis://redis:6379/0")],
-        },
-    },
-}
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
