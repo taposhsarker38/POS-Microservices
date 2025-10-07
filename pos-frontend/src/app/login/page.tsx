@@ -16,7 +16,6 @@ import clsx from "clsx";
 import PasswordInput from "@/components/ui/PasswordInput";
 import type { RootState } from "@/stores/store";
 
-/* ----------------------- small helpers ----------------------- */
 const SpinnerCentered: React.FC<{ message?: string }> = ({ message = "Loading…" }) => (
   <div className="min-h-screen flex items-center justify-center">
     <div className="flex flex-col items-center gap-3">
@@ -28,8 +27,6 @@ const SpinnerCentered: React.FC<{ message?: string }> = ({ message = "Loading…
     </div>
   </div>
 );
-
-/* ----------------------- weather/theme (kept from your original) ----------------------- */
 type WeatherResp = {
   weather?: { main: string; description?: string }[];
   main?: { temp?: number; feels_like?: number };
@@ -64,17 +61,12 @@ const chooseTheme = (main: string, timeOfDay: string) => {
   if (main === "Snow") return { style: { background: "linear-gradient(180deg,#f8fcff 0%,#e6f3ff 100%)" }, btn: "bg-sky-600 text-white hover:bg-sky-700 focus:ring-sky-300" };
   return { style: { background: "linear-gradient(180deg,#f0f4f8 0%,#dfe9f3 100%)" }, btn: "bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-300" };
 };
-
-/* ----------------------- form schema ----------------------- */
 const LoginSchema = z.object({
   username: z.string().min(1, "Username is required"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 type LoginInput = z.infer<typeof LoginSchema>;
-
-/* ----------------------- component ----------------------- */
 export default function LoginPage() {
-  // theme + weather (unchanged behavior)
   const [timeOfDay, setTimeOfDay] = useState(getTimeOfDay());
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
   useEffect(() => {
@@ -96,38 +88,22 @@ export default function LoginPage() {
   const { data: weatherData, error: weatherError, isLoading: weatherLoading } = useSWR<WeatherResp>(apiUrl, fetcher, { revalidateOnFocus: false, dedupingInterval: 60_000 });
   const mainWeather = weatherData?.weather?.[0]?.main ?? "Clear";
   const theme = chooseTheme(mainWeather, timeOfDay);
-
-  // router / query
   const router = useRouter();
   const search = useSearchParams();
   const nextUrl = (search?.get("next") as string) || "/dashboard";
-
-  // redux + api
   const dispatch = useDispatch();
   const accessToken = useSelector((s: RootState) => s.auth.accessToken);
-
-  // Run whoami only if we DON'T have a redux token (cookie-only session)
   const { data: whoamiUser, isLoading: whoamiIsLoading, isError: whoamiIsError } = useWhoamiQuery(undefined, { skip: Boolean(accessToken) });
-
-  // local redirecting state to prevent flash while we run router.replace
   const [isRedirecting, setIsRedirecting] = useState(false);
-
-  // If already authenticated (redux token OR cookie whoami), redirect client-side immediately.
   const isAuthenticatedClient = Boolean(accessToken || whoamiUser);
   useEffect(() => {
     if (isAuthenticatedClient) {
-      // set redirecting flag so UI shows spinner (no flash)
       setIsRedirecting(true);
-      // use replace so back button doesn't return to login
       router.replace(nextUrl ?? "/dashboard");
     }
   }, [isAuthenticatedClient, router, nextUrl]);
-
-  // Form + login mutation
   const [login, { isLoading: loginLoading }] = useLoginMutation();
   const { register, handleSubmit, formState: { errors } } = useForm<LoginInput>({ resolver: zodResolver(LoginSchema), defaultValues: { username: "", password: "" } });
-
-  // submit handler (useCallback for perf)
   const onSubmit = useCallback(async (formData: LoginInput) => {
     toast.dismiss();
     const t = toast.loading("Signing in...");
@@ -135,21 +111,14 @@ export default function LoginPage() {
       const res = await login({ username: formData.username, password: formData.password }).unwrap();
       const access = (res as any)?.access;
       if (!access) throw new Error("No access token returned");
-
-      // store token in redux for API header usage
       dispatch(setAccessToken(access));
-
-      // try to fetch user (populate redux user)
       try {
         const whoRes = await (dispatch as any)(apiSlice.endpoints.whoami.initiate(undefined));
         if (whoRes && "data" in whoRes && whoRes.data) dispatch(setUser(whoRes.data));
       } catch (e) {
-        // non-fatal
         console.warn("whoami failed after login", e);
       }
-
       toast.success("Signed in");
-      // navigate (we expect cookie was set by server; middleware will accept)
       router.push(nextUrl ?? "/dashboard");
     } catch (err: any) {
       console.error("Login error", err);
@@ -159,23 +128,14 @@ export default function LoginPage() {
       toast.dismiss(t);
     }
   }, [dispatch, login, router, nextUrl]);
-
-  // focus on username input for accessibility
   useEffect(() => {
     const el = document.getElementById("username") as HTMLInputElement | null;
     el?.focus();
   }, []);
-
-  // ------------- block rendering to avoid flash -------------
-  // If we decided to redirect (isRedirecting true) -> show spinner
   if (isRedirecting) return <SpinnerCentered message="Redirecting…" />;
-
-  // If no redux token and we are validating cookie session (whoami) -> show spinner (avoid flash)
   if (!accessToken && whoamiIsLoading) {
     return <SpinnerCentered message="Checking session…" />;
   }
-
-  // (At this point: not authenticated OR we have accessToken but user not redirected yet) -> render form
   return (
     <div className="min-h-screen flex items-center justify-center" style={theme.style}>
       <Toaster position="top-right" />

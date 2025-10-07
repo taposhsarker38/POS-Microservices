@@ -3,7 +3,6 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { RootState } from "./store";
 import { setAccessToken, clearAuth } from "./authSlice";
 import { Mutex } from "async-mutex";
-
 const baseUrl = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000") + "/api/v1/";
 
 const baseQuery = fetchBaseQuery({
@@ -48,15 +47,14 @@ export const apiSlice = createApi({
   tagTypes: ["Me", "Company", "Inventory", "Product", "Account"],
   endpoints: (builder) => ({
     login: builder.mutation({ query: (body) => ({ url: "token/", method: "POST", body }) }),
+    logout: builder.mutation({ query: () => ({ url: "logout/", method: "POST" }) }),
     whoami: builder.query({ query: () => "whoami/", providesTags: ["Me"] }),
-    getInventory: builder.query({ query: () => "inventory/", providesTags: ["Inventory"] }),
-    getProducts: builder.query({ query: () => "products/", providesTags: ["Product"] }),
+
   }),
 });
 
 export const {
   useLoginMutation,
+  useLogoutMutation,
   useWhoamiQuery,
-  useGetInventoryQuery,
-  useGetProductsQuery,
 } = apiSlice;
