@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from .models import Permission, Role, AuditLog, User, UserPreference
 from .serializers import PermissionSerializer, RoleSerializer, AuditCreateSerializer, RegisterSerializer, UserSerializer, PreferencesSerializer
 from django.core import signing
@@ -163,8 +163,19 @@ class LogoutView(APIView):
                 rt.blacklist()
             except Exception:
                 pass
-        resp = Response({'detail':'Logged out'}, status=200)
-        resp.delete_cookie('refresh_token')
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            access_token_str = auth_header.split()[1]
+            try:
+                at = AccessToken(access_token_str)
+            except Exception:
+                pass
+        resp = Response({'detail': 'Logged out'}, status=status.HTTP_200_OK)
+        resp.delete_cookie('refresh_token', path='/', domain=None, samesite='None')
+        resp.delete_cookie('access', path='/', domain=None, samesite='Lax')
+        resp.set_cookie('refresh_token', '', max_age=0, path='/', httponly=True, samesite='None', secure=True)
+        resp.set_cookie('access', '', max_age=0, path='/', httponly=True, samesite='Lax', secure=False)
+
         return resp
 
 class MeView(generics.RetrieveAPIView):

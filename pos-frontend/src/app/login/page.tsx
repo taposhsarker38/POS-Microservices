@@ -7,14 +7,14 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useDispatch, useSelector } from "react-redux";
-import { setAccessToken, setUser } from "@/stores/authSlice";
-import { apiSlice, useLoginMutation, useWhoamiQuery } from "@/stores/api";
+import { setAccessToken, setUser } from "@/store/authSlice";
+import { apiSlice, useLoginMutation, useWhoamiQuery } from "@/store/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
 import Link from "next/link";
 import clsx from "clsx";
 import PasswordInput from "@/components/ui/PasswordInput";
-import type { RootState } from "@/stores/store";
+import type { RootState } from "@/store/store";
 
 const SpinnerCentered: React.FC<{ message?: string }> = ({ message = "Loading…" }) => (
   <div className="min-h-screen flex items-center justify-center">

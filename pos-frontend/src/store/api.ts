@@ -47,7 +47,21 @@ export const apiSlice = createApi({
   tagTypes: ["Me", "Company", "Inventory", "Product", "Account"],
   endpoints: (builder) => ({
     login: builder.mutation({ query: (body) => ({ url: "token/", method: "POST", body }) }),
-    logout: builder.mutation({ query: () => ({ url: "logout/", method: "POST" }) }),
+    logout: builder.mutation<void, void>({
+  query: () => ({ url: 'logout/', method: 'POST' }),
+  async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+    try {
+      await queryFulfilled; // wait for server to respond (and send Set-Cookie)
+    } catch (err) {
+      // server error — still clear local state as fallback
+      console.warn('Logout request failed', err);
+    } finally {
+      // always clear client-side auth state & reset api cache
+      dispatch(clearAuth());
+      dispatch(apiSlice.util.resetApiState());
+    }
+  },
+}),
     whoami: builder.query({ query: () => "whoami/", providesTags: ["Me"] }),
 
   }),

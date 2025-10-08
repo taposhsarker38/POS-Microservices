@@ -4,7 +4,7 @@
 import React from 'react';
 import { Provider } from 'react-redux';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { store } from '../stores/store';
+import { store } from '../store/store';
 
 // Create a QueryClient on client side
 const queryClient = new QueryClient();

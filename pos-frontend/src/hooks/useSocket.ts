@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
-import { store } from "../stores/store";
-import { apiSlice } from "../stores/api";
+import { store } from "../store/store";
+import { apiSlice } from "../store/api";
 
 export function useSocket() {
   const socketRef = useRef<Socket | null>(null);
@@ -13,7 +13,6 @@ export function useSocket() {
 
     socket.on("connect", () => console.log("socket connected", socket.id));
     socket.on("inventory.updated", (payload: any) => {
-      // invalidate inventory cache
       store.dispatch(apiSlice.util.invalidateTags(["Inventory"]));
     });
     socket.on("order.created", () => {

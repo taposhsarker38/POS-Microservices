@@ -1,19 +1,26 @@
 "use client";
 import React from "react";
-import { useWhoamiQuery, useLogoutMutation } from "@/stores/api";
+import { useWhoamiQuery, useLogoutMutation, apiSlice } from "@/store/api";
+import { clearAuth } from "@/store/authSlice";
+import { useDispatch } from "react-redux";
 
 export default function Header() {
   const { data: me } = useWhoamiQuery(undefined, { skip: false });
   const [logout] = useLogoutMutation();
+const dispatch = useDispatch();
+  // Header component onLogout
+const onLogout = async () => {
+  try {
+    await logout().unwrap(); // wait for server to respond & Set-Cookie
+  } catch (err) {
+    console.warn(err);
+  } finally {
+    dispatch(clearAuth()); // clear client redux state
+    dispatch(apiSlice.util.resetApiState());
+    window.location.href = '/';
+  }
+};
 
-  const onLogout = async () => {
-    try {
-      await logout(null).unwrap();
-      if (typeof window !== "undefined") window.location.href = "/";
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   return (
     <header className="w-full border-b bg-white p-4 flex items-center justify-between">
