@@ -1,10 +1,11 @@
+import { companyClient } from './../lib/clients/companyClient';
 
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { RootState } from "./store";
 import { setAccessToken, clearAuth } from "./authSlice";
 import { Mutex } from "async-mutex";
-
 const baseUrl = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000") + "/api/v1/";
+const companyClientUrl = (process.env.NEXT_PUBLIC_COMPANY_URL || "http://localhost:8000") + "/api/v1/";
 
 const baseQuery = fetchBaseQuery({
   baseUrl,
@@ -48,15 +49,32 @@ export const apiSlice = createApi({
   tagTypes: ["Me", "Company", "Inventory", "Product", "Account"],
   endpoints: (builder) => ({
     login: builder.mutation({ query: (body) => ({ url: "token/", method: "POST", body }) }),
+    passwordreset: builder.mutation({ query: (body) => ({ url: "password-reset/", method: "POST", body }) }),
+    passwordresetconfirm: builder.mutation({ query: (body) => ({ url: "password-reset/confirm/", method: "POST", body }) }),
+    logout: builder.mutation<void, void>({
+  query: () => ({ url: 'logout/', method: 'POST' }),
+  async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+    try {
+      await queryFulfilled; // wait for server to respond (and send Set-Cookie)
+    } catch (err) {
+      // server error — still clear local state as fallback
+      console.warn('Logout request failed', err);
+    } finally {
+      // always clear client-side auth state & reset api cache
+      dispatch(clearAuth());
+      dispatch(apiSlice.util.resetApiState());
+    }
+  },
+}),
     whoami: builder.query({ query: () => "whoami/", providesTags: ["Me"] }),
-    getInventory: builder.query({ query: () => "inventory/", providesTags: ["Inventory"] }),
-    getProducts: builder.query({ query: () => "products/", providesTags: ["Product"] }),
+
   }),
 });
 
 export const {
   useLoginMutation,
+  usePasswordresetMutation,
+  usePasswordresetconfirmMutation,
+  useLogoutMutation,
   useWhoamiQuery,
-  useGetInventoryQuery,
-  useGetProductsQuery,
 } = apiSlice;
