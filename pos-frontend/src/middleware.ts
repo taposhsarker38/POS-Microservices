@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-const PUBLIC_PAGES = ["/", "/login", "/forgot-password"];
+const PUBLIC_PAGES = ["/", "/login", "/login/forgot"];
 export function middleware(req: NextRequest) {
   console.log("Middleware running for", req.nextUrl.pathname);
   const { pathname } = req.nextUrl;

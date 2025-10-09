@@ -1,7 +1,7 @@
 
 import axios, { AxiosHeaders } from "axios";
-import store from "../stores/store"; // relative path ঠিক করে নাও
-import { clearAuth, setAccessToken } from "../stores/authSlice";
+import store from "../store/store"; // relative path ঠিক করে নাও
+import { clearAuth, setAccessToken } from "../store/authSlice";
 
 const AUTH_BASE = process.env.NEXT_PUBLIC_AUTH_URL || (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000");
 
