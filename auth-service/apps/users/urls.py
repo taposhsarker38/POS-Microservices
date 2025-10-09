@@ -15,7 +15,6 @@ urlpatterns = [
     path('token/', CookieTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
     path('logout/', LogoutView.as_view(), name='logout'),
-    path('me/', MeView.as_view(), name='me'),
     path('make-service-token/', MakeServiceTokenView.as_view(), name='make_service_token'),
     path('whoami/', WhoAmIView.as_view(), name='whoami'),
     path('password-reset/', PasswordResetRequestView.as_view(), name='password_reset'),

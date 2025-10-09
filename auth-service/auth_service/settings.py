@@ -151,7 +151,11 @@ SIMPLE_JWT = {
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
-
+CORS_ALLOWED_ORIGINS = [
+  "https://app.example.com",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+]
 AUTH_USER_MODEL = 'users.User'
 # Celery
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL','redis://redis:6379/0')

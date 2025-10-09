@@ -50,7 +50,7 @@ class PasswordResetRequestView(APIView):
                 frontend_base = f"{request.scheme}://{request.get_host()}"
 
             # Build frontend reset url — ensure proper path on frontend
-            reset_path = f"/auth/reset"  # frontend route that accepts uid & token as query params
+            reset_path = f"/login/reset"  # frontend route that accepts uid & token as query params
             reset_url = f"{frontend_base.rstrip('/')}{reset_path}?uid={uid}&token={token}"
 
             # Send email (consider HTML email in production)
