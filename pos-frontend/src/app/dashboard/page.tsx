@@ -33,25 +33,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-// // src/app/dashboard/page.tsx or wherever your dashboard is
-// import DebugUserInfo from '@/components/DebugUserInfo';
-// import FetchInterceptor from '@/components/FetchInterceptor';
-// import NetworkDebugTool from '@/components/NetworkDebugTool';
-// import ReduxStoreChecker from '@/components/ReduxStoreChecker';
-// import TestWhoamiDirect from '@/components/TestWhoamiDirect';
-// import TokenChecker from '@/components/TokenChecker';
-
-// export default function DashboardPage() {
-//   return (
-//     <div>
-//       {/* Your dashboard content */}
-      
-//       {/* Temporary debug component */}
-//       <ReduxStoreChecker />
-//       <TestWhoamiDirect />
-//       <TokenChecker />
-//       <FetchInterceptor />
-//     </div>
-//   );
-// }
