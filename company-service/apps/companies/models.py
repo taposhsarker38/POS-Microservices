@@ -96,17 +96,11 @@ class Currency(models.Model):
     def __str__(self):
         return f"{self.code} ({self.symbol})"
 
-
-
-
 INVOICE_TEMPLATE_CHOICES = (
 ("standard", "Standard"),
 ("compact", "Compact"),
 ("detailed", "Detailed"),
 )
-
-
-
 
 class InvoiceSettings(models.Model):
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name="invoice_settings")
