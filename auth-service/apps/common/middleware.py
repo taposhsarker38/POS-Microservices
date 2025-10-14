@@ -1,4 +1,3 @@
-# auth_service/common/middleware.py
 import uuid
 import threading
 
@@ -19,18 +18,15 @@ class CorrelationIdMiddleware:
         cid = request.headers.get("X-Correlation-ID") or str(uuid.uuid4())
         request.correlation_id = cid
 
-        # allow services to set company_id via header (optional)
         request.company_id = request.headers.get("X-Company-ID") or None
 
         _thread_locals.request = request
         try:
             response = self.get_response(request)
-            # ensure header is returned for trace
             if hasattr(response, "headers"):
                 response.headers["X-Correlation-ID"] = cid
             else:
                 response["X-Correlation-ID"] = cid
             return response
         finally:
-            # cleanup thread local
             _thread_locals.request = None

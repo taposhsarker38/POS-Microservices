@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useDispatch, useSelector } from "react-redux";
-import { setAccessToken, setUser } from "@/store/authSlice";
+import { setAccessToken, setTokens } from "@/store/authSlice";
 import { apiSlice, useLoginMutation, useWhoamiQuery } from "@/store/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
@@ -79,7 +79,7 @@ export default function LoginPage() {
       // Fetch user data
       try {
         const whoRes = await (dispatch as any)(apiSlice.endpoints.whoami.initiate(undefined));
-        if (whoRes?.data) dispatch(setUser(whoRes.data));
+        if (whoRes?.data) dispatch(setTokens(whoRes.data));
       } catch (e) {
         console.warn("whoami failed after login", e);
       }
@@ -173,8 +173,6 @@ export default function LoginPage() {
                   Register
                 </Link>
               </div>
-
-              {/* Weather info in form */}
               <p className="text-xs text-slate-500 text-center mt-3">
                 Theme adapts to your local time & weather
               </p>

@@ -1,4 +1,3 @@
-# auth_service/users/permissions.py
 from rest_framework.permissions import BasePermission
 
 class IsOwnerOrAdmin(BasePermission):
@@ -6,10 +5,8 @@ class IsOwnerOrAdmin(BasePermission):
         user = getattr(request, 'user', None)
         if not user or not getattr(user, "is_authenticated", False):
             return False
-        # superusers or staff have access
         if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
             return True
-        # role may be FK to Role model; check role.name safely
         role = getattr(user, 'role', None)
         role_name = getattr(role, 'name', None) if role else None
         return role_name in ('owner', 'admin')

@@ -42,7 +42,19 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id','username','email','first_name','last_name','phone','company_id','wing_id','role']
+        fields = [
+            'id',
+            'username',
+            'email',
+            'first_name',
+            'last_name',
+            'is_superuser',
+            'is_active',
+            'role',
+            'permissions',
+            'company_id',
+        ]
+        read_only_fields = ['id', 'is_superuser']
 
 class PreferencesSerializer(serializers.Serializer):
     accent = serializers.CharField(allow_blank=True, required=False)

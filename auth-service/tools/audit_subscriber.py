@@ -12,8 +12,6 @@ def main():
     print("Subscribed to audit channel, waiting messages...")
     for msg in p.listen():
         print("AUDIT MSG:", msg)
-        # do minimal processing — in prod you'd forward to DB or external service
-
 if __name__ == "__main__":
     try:
         main()

@@ -1,4 +1,4 @@
-# auth_service/common/tasks.py
+
 import json
 import os
 import logging
@@ -27,10 +27,8 @@ def send_audit_event_task(self, event):
     except RequestException as exc:
         logger.exception("Audit post failed: %s", exc)
         try:
-            # will retry with exponential backoff based on celery config
             raise self.retry(exc=exc)
         except Exception:
-            # On final failure, persist
             try:
                 with open(LOCAL_FALLBACK, 'a') as f:
                     f.write(json.dumps(event, default=str) + "\n")
