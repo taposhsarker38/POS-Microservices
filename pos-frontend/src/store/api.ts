@@ -1,4 +1,4 @@
-// src/store/api.ts
+import Cookies from "js-cookie";
 import {
   createApi,
   fetchBaseQuery,
@@ -7,7 +7,7 @@ import {
   FetchBaseQueryError,
 } from "@reduxjs/toolkit/query/react";
 import type { RootState } from "./store";
-import { setAccessToken, clearAuth,setRefreshToken } from "./authSlice";
+import { setAccessToken, clearAuth, setRefreshToken } from "./authSlice";
 import { Mutex } from "async-mutex";
 import type {
   User,
@@ -18,34 +18,40 @@ import type {
   TokenResponse,
 } from "./type";
 
-/**
- * Configuration
- */
+const ACCESS_COOKIE = "access_token";
+
 const BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001";
 const COMPANY_BASE = process.env.NEXT_PUBLIC_COMPANY_URL || "http://localhost:8002";
 export const baseUrl = `${BASE}/api/v1/`;
 export const companyUrl = `${COMPANY_BASE}/api/v1/`;
 
-/**
- * Helper: is FormData
- */
 const isFormData = (v: unknown): v is FormData => {
   return typeof FormData !== "undefined" && v instanceof FormData;
 };
 
-/**
- * prepareHeaders: don't set Content-Type globally because FormData needs browser to set boundary.
- */
+// helper to validate cookie values (ignore "undefined" string)
+const validCookie = (v: string | undefined | null) => !!v && v !== "undefined";
+
 const prepareHeaders = (headers: Headers, { getState }: { getState: () => unknown }) => {
-  const token = (getState() as RootState).auth.accessToken;
+  const tokenFromStore = (getState() as RootState).auth?.accessToken || null;
+  // backend sometimes sets cookie named "access" (check both)
+  const serverCookie = typeof window !== "undefined" ? Cookies.get("access") || null : null;
+  const clientCookie = typeof window !== "undefined" ? Cookies.get(ACCESS_COOKIE) || null : null;
+
+  const token =
+    tokenFromStore ||
+    (validCookie(serverCookie) ? serverCookie : validCookie(clientCookie) ? clientCookie : null);
+
+  if (typeof window !== "undefined") {
+    // debug to see what's happening on first reload - remove later
+    // eslint-disable-next-line no-console
+    console.debug("[prepareHeaders] tokens:", { tokenFromStore: !!tokenFromStore, serverCookie: !!serverCookie, clientCookie: !!clientCookie });
+  }
+
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  // NOTE: don't set Content-Type here (FormData needs browser-set boundary)
   return headers;
 };
 
-/**
- * Base fetchers
- */
 const baseFetch = fetchBaseQuery({
   baseUrl,
   credentials: "include",
@@ -58,21 +64,21 @@ const companyFetch = fetchBaseQuery({
   prepareHeaders,
 });
 
-/**
- * Wrapper to allow FormData bodies (we assign a prepareHeaders override when body is FormData).
- * This returns a BaseQueryFn compatible function.
- */
 const formAwareBase =
   (base: ReturnType<typeof fetchBaseQuery>): BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =>
   async (args, api, extraOptions) => {
-    const modified = typeof args === "string" ? args : { ...args } as FetchArgs;
+    const modified = typeof args === "string" ? args : ({ ...args } as FetchArgs);
     if (typeof modified !== "string" && isFormData(modified.body)) {
-      // override prepareHeaders so we don't set Content-Type
-      // fetchBaseQuery accepts prepareHeaders per-call via `prepareHeaders` field
-      // but types don't include it — but fetchBaseQuery handles it in runtime.
+      // override prepareHeaders for this call so Content-Type isn't forced; still attach Authorization
       // @ts-ignore
       modified.prepareHeaders = (headers: Headers) => {
-        const token = (api.getState() as RootState).auth.accessToken;
+        const tokenFromStore = (api.getState() as RootState).auth?.accessToken || null;
+        const serverCookie = typeof window !== "undefined" ? Cookies.get("access") || null : null;
+        const clientCookie = typeof window !== "undefined" ? Cookies.get(ACCESS_COOKIE) || null : null;
+        const token =
+          tokenFromStore ||
+          (validCookie(serverCookie) ? serverCookie : validCookie(clientCookie) ? clientCookie : null);
+
         if (token) headers.set("Authorization", `Bearer ${token}`);
         return headers;
       };
@@ -101,7 +107,6 @@ const withReauth =
       if (!mutex.isLocked()) {
         const release = await mutex.acquire();
         try {
-          // call refresh endpoint (on main auth service)
           const refreshResult = await baseQueryWithForm(
             { url: "token/refresh/", method: "POST" } as FetchArgs,
             api,
@@ -113,7 +118,7 @@ const withReauth =
               api.dispatch(setAccessToken(data.access));
             }
             if (data.refresh) {
-              api.dispatch(setRefreshToken || (() => {})); // noop if not present
+              api.dispatch(setRefreshToken(data.refresh));
             }
           } else {
             api.dispatch(clearAuth());
@@ -135,9 +140,6 @@ const companyQueryWithReauth = withReauth(companyQueryWithForm);
 
 /**
  * Create API slice.
- *
- * Note: For company-scoped endpoints we use `queryFn` and call companyQueryWithReauth directly.
- * For normal endpoints we use simple `query` definitions (RTK will pass them to baseQueryWithReauth).
  */
 export const apiSlice = createApi({
   reducerPath: "api",
@@ -147,6 +149,17 @@ export const apiSlice = createApi({
     // AUTH
     login: builder.mutation<{ access: string; refresh?: string }, { username?: string; email?: string; password: string }>({
       query: (body) => ({ url: "token/", method: "POST", body }),
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          if (data) {
+            if (data.access && data.access !== "undefined") dispatch(setAccessToken(data.access));
+            if (data.refresh && data.refresh !== "undefined") dispatch(setRefreshToken(data.refresh));
+          }
+        } catch (err) {
+          // ignore
+        }
+      },
     }),
     logout: builder.mutation<void, void>({
       query: () => ({ url: "logout/", method: "POST" }),
@@ -160,121 +173,210 @@ export const apiSlice = createApi({
         }
       },
     }),
-    // whoami (simple GET)
-    whoami: builder.query<User | null, void>({
-      query: () => ({ url: "whoami/", method: "GET" }),
+    
+    whoami: builder.query<User, void>({
+      query: () => "whoami/",
       providesTags: ["Me"],
     }),
 
-    // COMPANY (use companyQueryWithReauth via queryFn to target different base)
+    // COMPANY ENDPOINTS - Using query instead of queryFn for simpler endpoints
     getCompany: builder.query<Company, string>({
-      async queryFn(companyId, api, extraOptions) {
-        const res = await companyQueryWithReauth({ url: `companies/${companyId}/`, method: "GET" }, api, extraOptions);
-        if (res.error) return { error: res.error as any };
-        return { data: res.data as Company, meta: res.meta };
-      },
-      providesTags: ["Company"],
+      query: (companyId) => `companies/${companyId}/`,
+      providesTags: (result, error, companyId) => [
+        { type: "Company", id: companyId }
+      ],
     }),
+    
     updateCompany: builder.mutation<Company, { id: string; data: Partial<Company> }>({
-      async queryFn({ id, data }, api, extraOptions) {
-        const res = await companyQueryWithReauth({ url: `companies/${id}/`, method: "PATCH", body: data }, api, extraOptions);
-        if (res.error) return { error: res.error as any };
-        return { data: res.data as Company, meta: res.meta };
-      },
-      invalidatesTags: ["Company"],
+      query: ({ id, data }) => ({
+        url: `companies/${id}/`,
+        method: "PATCH",
+        body: data,
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: "Company", id }
+      ],
     }),
+
+    // FIXED: Properly typed queryFn for company settings
     getCompanySettings: builder.query<CompanySettings, string>({
-      async queryFn(companyId, api, extraOptions) {
-        const res = await companyQueryWithReauth({ url: `companies-settings-view/${companyId}/settings/`, method: "GET" }, api, extraOptions);
-        if (res.error) return { error: res.error as any };
-        return { data: res.data as CompanySettings, meta: res.meta };
+      queryFn: async (companyId, api, extraOptions, baseQuery) => {
+        try {
+          const result = await companyQueryWithReauth(
+            { 
+              url: `companies-settings-view/${companyId}/settings/`, 
+              method: "GET" 
+            },
+            api,
+            extraOptions,
+          );
+          
+          if (result.error) {
+            return { error: result.error };
+          }
+          
+          // Properly type the response
+          return { 
+            data: result.data as CompanySettings 
+          };
+        } catch (error) {
+          return { 
+            error: { 
+              status: 'CUSTOM_ERROR', 
+              error: 'Failed to fetch company settings' 
+            } as FetchBaseQueryError 
+          };
+        }
       },
       providesTags: ["CompanySettings"],
     }),
-    updateCompanySettings: builder.mutation<CompanySettings, { company_id: string; data: FormData | Partial<CompanySettings> }>({
-      async queryFn({ company_id, data }, api, extraOptions) {
-        const res = await companyQueryWithReauth({ url: `companies-settings-view/${company_id}/settings/`, method: "PUT", body: data } as FetchArgs, api, extraOptions);
-        if (res.error) return { error: res.error as any };
-        return { data: res.data as CompanySettings, meta: res.meta };
+
+    // FIXED: Properly typed mutation for company settings
+    updateCompanySettings: builder.mutation<CompanySettings, { 
+      company_id: string; 
+      data: FormData | Partial<CompanySettings> 
+    }>({
+      queryFn: async ({ company_id, data }, api, extraOptions, baseQuery) => {
+        try {
+          const result = await companyQueryWithReauth(
+            { 
+              url: `companies-settings-view/${company_id}/settings/`, 
+              method: "PUT", 
+              body: data 
+            },
+            api,
+            extraOptions,
+          );
+          
+          if (result.error) {
+            return { error: result.error };
+          }
+          
+          return { 
+            data: result.data as CompanySettings 
+          };
+        } catch (error) {
+          return { 
+            error: { 
+              status: 'CUSTOM_ERROR', 
+              error: 'Failed to update company settings' 
+            } as FetchBaseQueryError 
+          };
+        }
       },
       invalidatesTags: ["CompanySettings"],
     }),
 
-    // NAV
+    // NAV ENDPOINTS - Using queryFn pattern
     getCompanyNav: builder.query<NavItem[], string>({
-      async queryFn(companyId, api, extraOptions) {
-        const res = await companyQueryWithReauth({ url: `companies/${companyId}/nav/`, method: "GET" }, api, extraOptions);
-        if (res.error) return { error: res.error as any };
-        return { data: res.data as NavItem[], meta: res.meta };
+      queryFn: async (companyId, api, extraOptions, baseQuery) => {
+        const result = await companyQueryWithReauth(
+          { url: `companies/${companyId}/nav/`, method: "GET" },
+          api,
+          extraOptions,
+        );
+        
+        if (result.error) {
+          return { error: result.error };
+        }
+        
+        return { 
+          data: result.data as NavItem[] 
+        };
       },
       providesTags: ["Nav"],
     }),
+
     createCompanyNav: builder.mutation<NavItem, { company_id: string; data: Partial<NavItem> }>({
-      async queryFn({ company_id, data }, api, extraOptions) {
-        const res = await companyQueryWithReauth({ url: `companies/${company_id}/nav/`, method: "POST", body: data }, api, extraOptions);
-        if (res.error) return { error: res.error as any };
-        return { data: res.data as NavItem, meta: res.meta };
-      },
-      invalidatesTags: ["Nav"],
-    }),
-    updateCompanyNav: builder.mutation<NavItem, { company_id: string; nav_id: string; data: Partial<NavItem> }>({
-      async queryFn({ company_id, nav_id, data }, api, extraOptions) {
-        const res = await companyQueryWithReauth({ url: `companies/${company_id}/nav/${nav_id}/`, method: "PATCH", body: data }, api, extraOptions);
-        if (res.error) return { error: res.error as any };
-        return { data: res.data as NavItem, meta: res.meta };
-      },
-      invalidatesTags: ["Nav"],
-    }),
-    deleteCompanyNav: builder.mutation<void, { company_id: string; nav_id: string }>({
-      async queryFn({ company_id, nav_id }, api, extraOptions) {
-        const res = await companyQueryWithReauth({ url: `companies/${company_id}/nav/${nav_id}/`, method: "DELETE" }, api, extraOptions);
-        if (res.error) return { error: res.error as any };
-        return { data: undefined, meta: res.meta };
+      queryFn: async ({ company_id, data }, api, extraOptions, baseQuery) => {
+        const result = await companyQueryWithReauth(
+          { url: `companies/${company_id}/nav/`, method: "POST", body: data },
+          api,
+          extraOptions,
+        );
+        
+        if (result.error) {
+          return { error: result.error };
+        }
+        
+        return { 
+          data: result.data as NavItem 
+        };
       },
       invalidatesTags: ["Nav"],
     }),
 
-    // Users & Roles (example simple endpoints using main base)
+    // SIMPLE ENDPOINTS using main API (no queryFn needed)
     getUsers: builder.query<User[], void>({
-      query: () => ({ url: "users/", method: "GET" }),
+      query: () => "users/",
       providesTags: ["Users"],
     }),
+
     getUser: builder.query<User, string>({
-      query: (id) => ({ url: `users/${id}/`, method: "GET" }),
+      query: (id) => `users/${id}/`,
       providesTags: ["Users"],
     }),
+
     createUser: builder.mutation<User, Partial<User>>({
-      query: (data) => ({ url: "users/", method: "POST", body: data }),
-      invalidatesTags: ["Users"],
-    }),
-    updateUser: builder.mutation<User, { id: string; data: Partial<User> }>({
-      query: ({ id, data }) => ({ url: `users/${id}/`, method: "PATCH", body: data }),
-      invalidatesTags: ["Users"],
-    }),
-    deleteUser: builder.mutation<void, string>({
-      query: (id) => ({ url: `users/${id}/`, method: "DELETE" }),
+      query: (data) => ({
+        url: "users/",
+        method: "POST",
+        body: data,
+      }),
       invalidatesTags: ["Users"],
     }),
 
-    // Roles
+    updateUser: builder.mutation<User, { id: string; data: Partial<User> }>({
+      query: ({ id, data }) => ({
+        url: `users/${id}/`,
+        method: "PATCH",
+        body: data,
+      }),
+      invalidatesTags: ["Users"],
+    }),
+
+    deleteUser: builder.mutation<void, string>({
+      query: (id) => ({
+        url: `users/${id}/`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Users"],
+    }),
+
+    // ROLES
     getRoles: builder.query<Role[], void>({
-      query: () => ({ url: "roles/", method: "GET" }),
+      query: () => "roles/",
       providesTags: ["Roles"],
     }),
+
     getRole: builder.query<Role, string>({
-      query: (id) => ({ url: `roles/${id}/`, method: "GET" }),
+      query: (id) => `roles/${id}/`,
       providesTags: ["Roles"],
     }),
+
     createRole: builder.mutation<Role, Partial<Role>>({
-      query: (data) => ({ url: "roles/", method: "POST", body: data }),
+      query: (data) => ({
+        url: "roles/",
+        method: "POST",
+        body: data,
+      }),
       invalidatesTags: ["Roles"],
     }),
+
     updateRole: builder.mutation<Role, { id: string; data: Partial<Role> }>({
-      query: ({ id, data }) => ({ url: `roles/${id}/`, method: "PATCH", body: data }),
+      query: ({ id, data }) => ({
+        url: `roles/${id}/`,
+        method: "PATCH",
+        body: data,
+      }),
       invalidatesTags: ["Roles"],
     }),
+
     deleteRole: builder.mutation<void, string>({
-      query: (id) => ({ url: `roles/${id}/`, method: "DELETE" }),
+      query: (id) => ({
+        url: `roles/${id}/`,
+        method: "DELETE",
+      }),
       invalidatesTags: ["Roles"],
     }),
   }),
@@ -290,8 +392,6 @@ export const {
   useUpdateCompanySettingsMutation,
   useGetCompanyNavQuery,
   useCreateCompanyNavMutation,
-  useUpdateCompanyNavMutation,
-  useDeleteCompanyNavMutation,
   useGetUsersQuery,
   useGetUserQuery,
   useCreateUserMutation,

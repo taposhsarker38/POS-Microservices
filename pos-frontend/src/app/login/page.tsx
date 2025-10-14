@@ -173,8 +173,6 @@ export default function LoginPage() {
                   Register
                 </Link>
               </div>
-
-              {/* Weather info in form */}
               <p className="text-xs text-slate-500 text-center mt-3">
                 Theme adapts to your local time & weather
               </p>
