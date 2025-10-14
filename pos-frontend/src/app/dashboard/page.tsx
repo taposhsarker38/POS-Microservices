@@ -2,7 +2,7 @@
 import React from "react";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
-import {  useGetInventoryQuery } from "../../stores/api";
+// import {  useGetInventoryQuery } from "../../store/api";
 
 import { useSocket } from "../../hooks/useSocket";
 

@@ -1,20 +1,17 @@
-// src/components/Providers.tsx
+
 'use client';
 
 import React from 'react';
-import { Provider } from 'react-redux';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Provider as ReduxProvider } from 'react-redux';
 import { store } from '../store/store';
-
-// Create a QueryClient on client side
-const queryClient = new QueryClient();
+import AuthHydrator from './AuthHydrator';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <Provider store={store}>
-      <QueryClientProvider client={queryClient}>
+    <ReduxProvider store={store}>
+      <AuthHydrator>
         {children}
-      </QueryClientProvider>
-    </Provider>
+      </AuthHydrator>
+    </ReduxProvider>
   );
 }

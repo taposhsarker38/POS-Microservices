@@ -1,5 +1,5 @@
 import type { Socket } from "socket.io-client";
-import { apiSlice } from "../stores/api";
+import { apiSlice } from "../store/api";
 
 export function createSocketMiddleware(socket: Socket) {
   return (storeAPI: any) => {
