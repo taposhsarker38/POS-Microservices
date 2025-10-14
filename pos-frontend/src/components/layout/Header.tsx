@@ -1,26 +1,38 @@
+// src/components/HeaderWithSettings.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
 import { useDispatch } from "react-redux";
 import { skipToken } from '@reduxjs/toolkit/query/react';
-import { 
-  useWhoamiQuery, 
-  useLogoutMutation, 
-  apiSlice, 
-  useGetCompanyQuery, 
-  useUpdateCompanyMutation, 
-  useGetCompanySettingsQuery, 
-  useUpdateCompanySettingsMutation 
+import {
+  useWhoamiQuery,
+  useLogoutMutation,
+  apiSlice,
+  useGetCompanyQuery,
+  useUpdateCompanyMutation,
+  useGetCompanySettingsQuery,
+  useUpdateCompanySettingsMutation,
 } from "@/store/api";
 import { clearAuth } from "@/store/authSlice";
 import { Button } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Sun, Moon, Settings, LogOut, Menu as MenuIcon, X, Building2, Sparkles, Palette, User, ChevronDown } from "lucide-react";
-import Cookies from 'js-cookie';
+import {
+  Sun,
+  Moon,
+  Settings,
+  LogOut,
+  Menu as MenuIcon,
+  X,
+  Sparkles,
+  Palette,
+  User,
+  ChevronDown,
+  Building2,
+} from "lucide-react";
+import Cookies from "js-cookie";
 import { motion, AnimatePresence } from "framer-motion";
 
 const COOKIE_KEYS = {
@@ -38,6 +50,7 @@ export default function HeaderWithSettings() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     logo: null as File | null,
@@ -101,12 +114,10 @@ export default function HeaderWithSettings() {
     if (!me?.company_id) return;
 
     try {
-      // Update company if name changed
       if (formData.name !== company?.name) {
         await updateCompany({ id: me.company_id, data: { name: formData.name } }).unwrap();
       }
 
-      // Update settings
       const settingsData: any = {};
       if (formData.themeColor !== settings?.primary_color) {
         settingsData.primary_color = formData.themeColor;
@@ -124,7 +135,7 @@ export default function HeaderWithSettings() {
       }
 
       if (updated) {
-        // Optionally invalidate tags or refetch
+        // Optionally refetch or invalidate tags
       }
       setSettingsOpen(false);
     } catch (err) {
@@ -161,32 +172,41 @@ export default function HeaderWithSettings() {
       <header className="w-full border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-white via-slate-50 to-white dark:from-slate-900 dark:via-slate-900/95 dark:to-slate-900 backdrop-blur-xl shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <motion.div 
-              className="flex items-center gap-3 group cursor-pointer"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              {formData.logoUrl ? (
-                <img src={formData.logoUrl} alt="Logo" className="h-10 w-10 rounded-lg object-cover shadow-md" />
-              ) : (
-                <div 
-                  className="h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold shadow-lg bg-gradient-to-br from-indigo-500 to-purple-600"
-                  style={{ background: `linear-gradient(135deg, ${formData.themeColor}, ${formData.themeColor}dd)` }}
-                >
-                  <Building2 className="h-5 w-5" />
-                </div>
-              )}
-              <div className="hidden sm:block">
-                <h1 className="text-xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
-                  {formData.name || "StockMate"}
-                </h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                  <Sparkles className="h-3 w-3" />
-                  Inventory Management
-                </p>
-              </div>
-            </motion.div>
 
+            {/* LEFT: mobile-only brand + mobile menu button */}
+            <div className="flex items-center gap-3">
+              {/* Mobile menu button (visible on mobile) */}
+              <button
+                className="sm:hidden p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="Open menu"
+                title="Menu"
+              >
+                <MenuIcon className="h-5 w-5 text-slate-700 dark:text-slate-200" />
+              </button>
+
+              {/* MOBILE brand: show logo/name only on mobile */}
+              <div className="flex items-center gap-3 sm:hidden">
+                {formData.logoUrl ? (
+                  <img src={formData.logoUrl} alt="Logo" className="h-8 w-8 rounded-md object-cover" />
+                ) : (
+                  <div
+                    className="h-8 w-8 rounded-md flex items-center justify-center text-white font-bold shadow-md"
+                    style={{ background: `linear-gradient(135deg, ${formData.themeColor}, ${formData.themeColor}dd)` }}
+                  >
+                    <Building2 className="h-4 w-4" />
+                  </div>
+                )}
+                <div>
+                  <h1 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                    {formData.name || "StockMate"}
+                  </h1>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Inventory</p>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT: actions (same for desktop & mobile, but layout adapts) */}
             <div className="flex items-center gap-2">
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -218,25 +238,19 @@ export default function HeaderWithSettings() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-900 dark:bg-slate-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                  {dark ? 'Light mode' : 'Dark mode'}
-                </span>
               </motion.button>
 
               <motion.button
                 whileHover={{ scale: 1.05, rotate: 90 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setSettingsOpen(true)}
-                className="relative p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 group"
+                className="relative p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200 group hidden xs:inline-flex sm:inline-flex"
                 title="Company settings"
               >
                 <Settings className="h-5 w-5 text-slate-700 dark:text-slate-300" />
-                <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-900 dark:bg-slate-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                  Settings
-                </span>
               </motion.button>
 
-              <Separator orientation="vertical" className="h-8 mx-1" />
+              <Separator orientation="vertical" className="h-8 mx-1 hidden md:block" />
 
               <div className="relative">
                 <motion.button
@@ -251,6 +265,8 @@ export default function HeaderWithSettings() {
                     </div>
                     <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 bg-green-500 rounded-full border-2 border-white dark:border-slate-900"></div>
                   </div>
+
+                  {/* Hide full name on small screens; keep on md+ */}
                   <div className="hidden md:block text-left">
                     <p className="text-sm font-semibold text-slate-900 dark:text-white leading-none">
                       {getDisplayName()}
@@ -259,6 +275,7 @@ export default function HeaderWithSettings() {
                       {me?.is_superuser ? "Superuser" : "Administrator"}
                     </p>
                   </div>
+
                   <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform duration-200 ${profileMenuOpen ? 'rotate-180' : ''}`} />
                 </motion.button>
 
@@ -268,6 +285,7 @@ export default function HeaderWithSettings() {
                       <div 
                         className="fixed inset-0 z-30" 
                         onClick={() => setProfileMenuOpen(false)}
+                        aria-hidden
                       />
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
@@ -328,10 +346,98 @@ export default function HeaderWithSettings() {
                 </AnimatePresence>
               </div>
             </div>
+
           </div>
         </div>
       </header>
 
+      {/* Mobile Menu (off-canvas) */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.45 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12 }}
+              onClick={() => setMobileMenuOpen(false)}
+              className="fixed inset-0 z-40 bg-black"
+              aria-hidden
+            />
+
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="fixed inset-y-0 left-0 z-50 w-4/5 max-w-xs bg-white dark:bg-slate-900 shadow-2xl p-4"
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  {formData.logoUrl ? (
+                    <img src={formData.logoUrl} alt="Logo" className="h-10 w-10 rounded-md object-cover" />
+                  ) : (
+                    <div
+                      className="h-10 w-10 rounded-md flex items-center justify-center text-white font-bold shadow-md"
+                      style={{ background: `linear-gradient(135deg, ${formData.themeColor}, ${formData.themeColor}dd)` }}
+                    >
+                      <Building2 className="h-5 w-5" />
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="font-semibold">{formData.name || "StockMate"}</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{me?.email}</p>
+                  </div>
+                </div>
+
+                <button onClick={() => setMobileMenuOpen(false)} aria-label="Close menu" className="p-2 rounded-md">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  onClick={() => { setSettingsOpen(true); setMobileMenuOpen(false); }}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
+                >
+                  <Settings className="h-4 w-4" />
+                  <span>Settings</span>
+                </button>
+
+                <button
+                  onClick={() => { /* navigate to profile */ setMobileMenuOpen(false); }}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"
+                >
+                  <User className="h-4 w-4" />
+                  <span>View Profile</span>
+                </button>
+
+                <div className="border-t border-slate-200 dark:border-slate-800 my-2" />
+
+                <div className="flex items-center justify-between px-3 py-2">
+                  <div>
+                    <Label className="text-xs">Dark mode</Label>
+                    <p className="text-[12px] text-slate-500 dark:text-slate-400">Toggle theme</p>
+                  </div>
+                  <Switch checked={dark} onCheckedChange={setDark} />
+                </div>
+
+                <button
+                  onClick={() => { onLogout(); }}
+                  className="w-full mt-3 text-left px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/10 text-red-600 flex items-center gap-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Settings drawer (unchanged) */}
       <AnimatePresence>
         {settingsOpen && (
           <>
@@ -350,6 +456,7 @@ export default function HeaderWithSettings() {
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
               className="fixed right-0 top-0 z-50 h-full w-full sm:w-[420px] bg-white dark:bg-slate-900 shadow-2xl overflow-auto"
             >
+              {/* header & settings content similar to before */}
               <div className="sticky top-0 z-10 bg-gradient-to-r from-indigo-600 to-purple-600 p-6 border-b border-indigo-700">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -371,14 +478,8 @@ export default function HeaderWithSettings() {
               </div>
 
               <div className="p-6 space-y-6">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="space-y-2"
-                >
+                <div>
                   <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
                     Company Name
                   </Label>
                   <Input
@@ -387,17 +488,11 @@ export default function HeaderWithSettings() {
                     placeholder="Enter company name"
                     className="border-2 focus:border-indigo-500 dark:focus:border-indigo-400"
                   />
-                </motion.div>
+                </div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="space-y-2"
-                >
+                <div>
                   <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" />
-                    Logo
+                    Logo (optional)
                   </Label>
                   <Input
                     type="file"
@@ -405,22 +500,10 @@ export default function HeaderWithSettings() {
                     onChange={handleFileChange}
                     className="border-2 focus:border-indigo-500 dark:focus:border-indigo-400"
                   />
-                  {formData.logoUrl && (
-                    <div className="mt-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-700">
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mb-2 font-medium">Preview:</p>
-                      <img src={formData.logoUrl} alt="Logo preview" className="h-16 w-16 rounded-lg object-cover shadow-md" />
-                    </div>
-                  )}
-                </motion.div>
+                </div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="space-y-2"
-                >
+                <div>
                   <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                    <Palette className="h-4 w-4" />
                     Theme Color
                   </Label>
                   <div className="flex gap-3">
@@ -437,51 +520,9 @@ export default function HeaderWithSettings() {
                       className="h-10 w-16 rounded-lg cursor-pointer border-2 border-slate-300 dark:border-slate-700"
                     />
                   </div>
-                  <div className="mt-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border-2 border-slate-200 dark:border-slate-700">
-                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-3 font-medium">Color Preview:</p>
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="h-14 w-14 rounded-xl shadow-lg border-2 border-white dark:border-slate-900"
-                        style={{ backgroundColor: formData.themeColor }}
-                      />
-                      <div className="flex-1">
-                        <div
-                          className="h-3 rounded-full mb-2"
-                          style={{ backgroundColor: formData.themeColor, opacity: 0.7 }}
-                        />
-                        <div
-                          className="h-3 rounded-full w-2/3"
-                          style={{ backgroundColor: formData.themeColor, opacity: 0.4 }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
+                </div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="p-4 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-800/50 rounded-xl border-2 border-slate-200 dark:border-slate-700"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      {dark ? <Moon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> : <Sun className="h-5 w-5 text-amber-500" />}
-                      <div>
-                        <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-0">Dark Mode</Label>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Toggle dark theme</p>
-                      </div>
-                    </div>
-                    <Switch checked={dark} onCheckedChange={setDark} />
-                  </div>
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                  className="flex gap-3 pt-4"
-                >
+                <div className="flex gap-3 pt-4">
                   <Button
                     variant="outline"
                     onClick={() => setSettingsOpen(false)}
@@ -497,8 +538,9 @@ export default function HeaderWithSettings() {
                     <Sparkles className="h-4 w-4 mr-2" />
                     {isLoading ? 'Saving...' : 'Save Changes'}
                   </Button>
-                </motion.div>
+                </div>
               </div>
+
             </motion.aside>
           </>
         )}

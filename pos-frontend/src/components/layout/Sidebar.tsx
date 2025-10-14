@@ -22,21 +22,12 @@ import {
   Shield,
   UserCog,
   Navigation,
+  Menu as MenuIcon,
+  X as XIcon,
 } from "lucide-react";
 import { useWhoamiQuery, useGetCompanyQuery, useGetCompanySettingsQuery, useGetCompanyNavQuery } from "@/store/api";
 import { skipToken } from '@reduxjs/toolkit/query/react';
-
-type NavItem = {
-  id: string;
-  title: string;
-  path: string | null;
-  children?: NavItem[];
-  parent?: string | null;
-  order: number;
-  permission_code?: string | null;
-  metadata: Record<string, any>;
-  created_at: string;
-};
+import type { NavItem, Company, CompanySettings, User } from "@/store/type";
 
 type SidebarProps = {
   activePath?: string;
@@ -78,8 +69,8 @@ export default function ModernSidebar({
   onNavigate,
 }: SidebarProps) {
   const { data: me, isLoading: meLoading, error: meError } = useWhoamiQuery();
-  
-  // Debug logs
+
+  // Debug logs (remove in prod)
   useEffect(() => {
     console.log('🔍 Sidebar - useWhoamiQuery state:', {
       data: me,
@@ -87,29 +78,23 @@ export default function ModernSidebar({
       error: meError,
     });
   }, [me, meLoading, meError]);
-  
-  const { data: companyData } = useGetCompanyQuery(me?.company_id ?? skipToken);
-  const { data: settings } = useGetCompanySettingsQuery(me?.company_id ?? skipToken);
-  const { data: navItems = [] } = useGetCompanyNavQuery(me?.company_id ?? skipToken);
 
-  // Debug: Check if user is superuser
-  useEffect(() => {
-    console.log('Current User:', me);
-    console.log('Is Superuser:', me?.is_superuser);
-    console.log('User email:', me?.email);
-  }, [me]);
+  const { data: companyData } = useGetCompanyQuery((me as User | undefined)?.company_id ?? skipToken);
+  const { data: settings } = useGetCompanySettingsQuery((me as User | undefined)?.company_id ?? skipToken);
+  const { data: navItemsRaw } = useGetCompanyNavQuery((me as User | undefined)?.company_id ?? skipToken);
 
-  // Superuser special menu items
-  // If your API doesn't return is_superuser, you can manually check email:
-  const isSuperuser = me?.is_superuser === true || me?.email === 'admin@example.com'; // Replace with your admin email
-  
+  // Ensure navItems is typed as NavItem[]
+  const navItems: NavItem[] = (navItemsRaw ?? []) as NavItem[];
+
+  const isSuperuser = (me as User | undefined)?.is_superuser === true || (me as User | undefined)?.email === 'admin@example.com';
+
   const superuserItems: NavItem[] = isSuperuser ? [
     {
       id: 'admin-section',
       title: 'Admin Panel',
       path: null,
       order: 9999,
-      metadata: {},
+      metadata: {} as Record<string, any>,
       created_at: new Date().toISOString(),
       children: [
         {
@@ -117,7 +102,7 @@ export default function ModernSidebar({
           title: 'User Management',
           path: '/admin/users',
           order: 1,
-          metadata: {},
+          metadata: {} as Record<string, any>,
           created_at: new Date().toISOString(),
         },
         {
@@ -125,7 +110,7 @@ export default function ModernSidebar({
           title: 'Roles & Permissions',
           path: '/admin/roles',
           order: 2,
-          metadata: {},
+          metadata: {} as Record<string, any>,
           created_at: new Date().toISOString(),
         },
         {
@@ -133,7 +118,7 @@ export default function ModernSidebar({
           title: 'Company Settings',
           path: '/admin/company-settings',
           order: 3,
-          metadata: {},
+          metadata: {} as Record<string, any>,
           created_at: new Date().toISOString(),
         },
         {
@@ -141,34 +126,36 @@ export default function ModernSidebar({
           title: 'Navigation Management',
           path: '/admin/navigation',
           order: 4,
-          metadata: {},
+          metadata: {} as Record<string, any>,
           created_at: new Date().toISOString(),
         },
       ],
     },
   ] : [];
-
-  // Combine regular nav items with superuser items
-  const allNavItems = [...navItems, ...superuserItems];
-
+  const allNavItems: NavItem[] = [...navItems, ...superuserItems];
   const [collapsed, setCollapsed] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    if (settings?.primary_color) {
-      document.documentElement.style.setProperty("--primary", settings.primary_color);
+    if ((settings as CompanySettings | undefined)?.primary_color) {
+      document.documentElement.style.setProperty("--primary", (settings as CompanySettings).primary_color as string);
     }
   }, [settings]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const toggleExpand = (id: string) => {
     setExpandedItems(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -178,6 +165,8 @@ export default function ModernSidebar({
       toggleExpand(item.id);
     } else if (onNavigate && item.path) {
       onNavigate(item.path);
+      // on mobile, auto close when navigating
+      setMobileOpen(false);
     }
   };
 
@@ -199,7 +188,7 @@ export default function ModernSidebar({
           whileHover={{ scale: 1.02, x: 4 }}
           whileTap={{ scale: 0.98 }}
           className={`
-            w-full flex items-center gap-3 px-${3 + depth * 4} py-3 rounded-xl transition-all duration-200 group relative
+            w-full flex items-center gap-3 ${depth === 0 ? "px-3" : `pl-${3 + depth * 4}`} py-3 rounded-xl transition-all duration-200 group relative
             ${isActive 
               ? isAdminItem 
                 ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/30" 
@@ -275,12 +264,13 @@ export default function ModernSidebar({
     );
   };
 
-  return (
+  // Desktop sidebar (hidden on small screens)
+  const DesktopSidebar = (
     <motion.aside
       initial={false}
       animate={{ width: collapsed ? 80 : 280 }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className="relative h-screen bg-gradient-to-b from-white via-slate-50 to-slate-100 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 border-r border-slate-200 dark:border-slate-800 shadow-xl flex flex-col"
+      className="hidden sm:flex relative h-screen bg-gradient-to-b from-white via-slate-50 to-slate-100 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 border-r border-slate-200 dark:border-slate-800 shadow-xl flex-col"
     >
       <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
         <motion.div
@@ -288,9 +278,9 @@ export default function ModernSidebar({
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
         >
-          {settings?.logo ? (
+          {(settings as CompanySettings | undefined)?.logo ? (
             <img
-              src={settings.logo}
+              src={(settings as CompanySettings).logo as string}
               alt="Logo"
               className="h-12 w-12 rounded-xl object-cover shadow-lg ring-2 ring-white dark:ring-slate-800"
             />
@@ -298,70 +288,57 @@ export default function ModernSidebar({
             <div
               className="h-12 w-12 rounded-xl flex items-center justify-center text-white font-bold shadow-lg bg-gradient-to-br from-indigo-500 to-purple-600 ring-2 ring-white dark:ring-slate-800"
               style={{
-                background: `linear-gradient(135deg, ${settings?.primary_color || "#6366f1"}, ${settings?.primary_color || "#6366f1"}dd)`,
+                background: `linear-gradient(135deg, ${(settings as CompanySettings)?.primary_color || "#6366f1"}, ${(settings as CompanySettings)?.primary_color || "#6366f1"}dd)`,
               }}
             >
               <Building2 className="h-6 w-6" />
             </div>
           )}
 
-          <AnimatePresence mode="wait">
-            {!collapsed && (
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                className="flex-1 min-w-0"
-              >
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white truncate">
-                  {companyData?.name || "StockMate"}
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 truncate">
-                  <Sparkles className="h-3 w-3" />
-                  Inventory System
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-
-        <AnimatePresence>
           {!collapsed && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2, delay: 0.1 }}
-              className="mt-4 grid grid-cols-2 gap-2"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+              className="flex-1 min-w-0"
             >
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-2 border border-green-200 dark:border-green-800">
-                <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400 mb-1" />
-                <p className="text-xs font-semibold text-green-900 dark:text-green-100">
-                  ৳45.2K
-                </p>
-                <p className="text-[10px] text-green-600 dark:text-green-400">
-                  Sales Today
-                </p>
-              </div>
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-2 border border-blue-200 dark:border-blue-800">
-                <Package className="h-4 w-4 text-blue-600 dark:text-blue-400 mb-1" />
-                <p className="text-xs font-semibold text-blue-900 dark:text-blue-100">
-                  1,234
-                </p>
-                <p className="text-[10px] text-blue-600 dark:text-blue-400">
-                  Products
-                </p>
-              </div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white truncate">
+                {(companyData as Company | undefined)?.name || "StockMate"}
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 truncate">
+                <Sparkles className="h-3 w-3" />
+                Inventory System
+              </p>
             </motion.div>
           )}
-        </AnimatePresence>
+        </motion.div>
+
+        {!collapsed && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, delay: 0.1 }}
+            className="mt-4 grid grid-cols-2 gap-2"
+          >
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-2 border border-green-200 dark:border-green-800">
+              <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400 mb-1" />
+              <p className="text-xs font-semibold text-green-900 dark:text-green-100">৳45.2K</p>
+              <p className="text-[10px] text-green-600 dark:text-green-400">Sales Today</p>
+            </div>
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-2 border border-blue-200 dark:border-blue-800">
+              <Package className="h-4 w-4 text-blue-600 dark:text-blue-400 mb-1" />
+              <p className="text-xs font-semibold text-blue-900 dark:text-blue-100">1,234</p>
+              <p className="text-[10px] text-blue-600 dark:text-blue-400">Products</p>
+            </div>
+          </motion.div>
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-1">
         {allNavItems.map((item) => (
           <React.Fragment key={item.id}>
-            {/* Add separator before admin section */}
             {item.id === 'admin-section' && (
               <div className="py-3">
                 <div className="border-t border-slate-300 dark:border-slate-700 mb-3"></div>
@@ -385,6 +362,7 @@ export default function ModernSidebar({
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
         className="absolute -right-4 top-20 h-8 w-8 rounded-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 shadow-lg flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-indigo-500 hover:text-white hover:border-indigo-500 transition-all duration-200 z-50"
+        aria-label="Toggle sidebar"
       >
         {collapsed ? (
           <ChevronRight className="h-4 w-4" />
@@ -393,5 +371,86 @@ export default function ModernSidebar({
         )}
       </motion.button>
     </motion.aside>
+  );
+  const MobileToggleButton = (
+    <button
+      onClick={() => setMobileOpen(true)}
+      className="sm:hidden fixed z-50 top-4 left-4 p-2 rounded-lg bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700"
+      aria-label="Open menu"
+      title="Open menu"
+    >
+      <MenuIcon className="h-5 w-5 text-slate-700 dark:text-slate-200" />
+    </button>
+  );
+  const MobileDrawer = (
+    <AnimatePresence>
+      {mobileOpen && (
+        <>
+          {/* backdrop */}
+          <motion.div
+            key="backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.5 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            onClick={() => setMobileOpen(false)}
+            className="fixed inset-0 z-40 bg-black"
+            aria-hidden
+          />
+
+          {/* drawer */}
+          <motion.aside
+            key="drawer"
+            initial={{ x: "-100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "-100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            className="fixed inset-y-0 left-0 z-50 w-4/5 max-w-xs bg-gradient-to-b from-white via-slate-50 to-slate-100 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 border-r border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {(settings as CompanySettings | undefined)?.logo ? (
+                  <img src={(settings as CompanySettings).logo as string} alt="Logo" className="h-10 w-10 rounded-lg object-cover" />
+                ) : (
+                  <div className="h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold shadow-lg bg-gradient-to-br from-indigo-500 to-purple-600">
+                    <Building2 className="h-5 w-5" />
+                  </div>
+                )}
+                <div>
+                  <h3 className="font-semibold text-sm">{(companyData as Company | undefined)?.name || "StockMate"}</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Inventory System</p>
+                </div>
+              </div>
+              <button onClick={() => setMobileOpen(false)} aria-label="Close menu" className="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
+                <XIcon className="h-5 w-5 text-slate-700 dark:text-slate-200" />
+              </button>
+            </div>
+
+            <nav className="p-3 space-y-1 overflow-y-auto">
+              {allNavItems.map((item) => (
+                <div key={item.id}>
+                  {renderItem(item)}
+                </div>
+              ))}
+            </nav>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
+  );
+
+  return (
+    <>
+      {/* Mobile toggle button */}
+      {MobileToggleButton}
+
+      {/* Desktop */}
+      {DesktopSidebar}
+
+      {/* Mobile drawer */}
+      {MobileDrawer}
+    </>
   );
 }
