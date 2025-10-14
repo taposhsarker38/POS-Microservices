@@ -1,15 +1,15 @@
 "use client";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import api from "../../lib/axios";
+// import api from "../../lib/axios";
 import Header from "../../components/layout/Header";
 import Sidebar from "../../components/layout/Sidebar";
 
 export default function CompaniesPage() {
-  const { data: companies, isLoading } = useQuery(
-    ["companies"],
-    async () => (await api.get("/companies")).data,
-  );
+  // const { data: companies, isLoading } = useQuery(
+  //   ["companies"],
+  //   async () => (await api.get("/companies")).data,
+  // );
   return (
     <div className="min-h-screen flex">
       <Sidebar />
@@ -17,7 +17,7 @@ export default function CompaniesPage() {
         <Header />
         <main className="p-6">
           <h2 className="text-xl font-semibold mb-4">Companies</h2>
-          {isLoading ? (
+          {/* {isLoading ? (
             <p>Loading…</p>
           ) : (
             <div className="grid gap-3">
@@ -28,7 +28,7 @@ export default function CompaniesPage() {
                 </div>
               ))}
             </div>
-          )}
+          )} */}
         </main>
       </div>
     </div>

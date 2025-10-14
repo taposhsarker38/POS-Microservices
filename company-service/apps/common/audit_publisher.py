@@ -1,4 +1,4 @@
-# auth_service/common/audit_publisher.py
+
 import json
 import logging
 import os
@@ -6,7 +6,6 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-# try to import Celery task (optional). import error shouldn't break
 try:
     from apps.common.tasks import send_audit_event_task
     CELERY_AVAILABLE = True
@@ -19,13 +18,10 @@ SERVICE_NAME = getattr(settings, "SERVICE_NAME", "unknown-service")
 
 def publish_audit_event(action, target_type, target_id=None, before=None, after=None, extra=None, request=None, raw_event=None):
     try:
-        # if caller already built event (raw_event), prefer it
         if raw_event is not None:
             event = raw_event
         else:
             req = request
-            # if request is a Django request-like or None
-            # try to extract minimal actor info safely
             actor = {}
             if getattr(req, 'user', None) and getattr(req.user, 'is_authenticated', False):
                 try:
@@ -58,17 +54,14 @@ def publish_audit_event(action, target_type, target_id=None, before=None, after=
                 }
             }
 
-        # enqueue to celery if available
         if CELERY_AVAILABLE and send_audit_event_task is not None:
             try:
-                # use apply_async (non-blocking). we serialize event to dict/json-friendly
+
                 send_audit_event_task.apply_async(args=[event], countdown=0)
                 logger.debug("Audit enqueued to celery: %s", event.get('action'))
                 return True
             except Exception as e:
                 logger.exception("Failed to enqueue audit event to celery, will fallback: %s", e)
-
-        # fallback: write to local file
         try:
             with open(LOCAL_FALLBACK_FILE, 'a') as f:
                 f.write(json.dumps(event, default=str) + "\n")

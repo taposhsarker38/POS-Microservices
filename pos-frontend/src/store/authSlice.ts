@@ -1,4 +1,4 @@
-// src/store/authSlice.ts
+
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import Cookies from "js-cookie";
 import type { TokenResponse } from "./type"; // adjust path if your types live elsewhere

@@ -1,15 +1,15 @@
 "use client";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import api from "../../lib/axios";
+// import api from "../../lib/axios";
 import Header from "../../components/layout/Header";
 import Sidebar from "../../components/layout/Sidebar";
 
 export default function InventoryPage() {
-  const { data: items, isLoading } = useQuery(
-    ["inventory"],
-    async () => (await api.get("/inventory")).data,
-  );
+  // const { data: items, isLoading } = useQuery(
+  //   ["inventory"],
+  //   async () => (await api.get("/inventory")).data,
+  // );
 
   return (
     <div className="min-h-screen flex">
@@ -18,7 +18,7 @@ export default function InventoryPage() {
         <Header />
         <main className="p-6">
           <h2 className="text-xl font-semibold mb-4">Inventory</h2>
-          {isLoading ? (
+          {/* {isLoading ? (
             <p>Loading…</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -39,7 +39,7 @@ export default function InventoryPage() {
                 </div>
               ))}
             </div>
-          )}
+          )} */}
         </main>
       </div>
     </div>

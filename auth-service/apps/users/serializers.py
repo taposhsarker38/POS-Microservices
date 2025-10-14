@@ -52,7 +52,7 @@ class UserSerializer(serializers.ModelSerializer):
             'is_active',
             'role',
             'permissions',
-            'company_id',  # or whatever your company field is called
+            'company_id',
         ]
         read_only_fields = ['id', 'is_superuser']
 
