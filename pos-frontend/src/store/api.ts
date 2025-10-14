@@ -17,35 +17,47 @@ import type {
   Role,
   TokenResponse,
 } from "./type";
-
+type FetchArgsWithPrepare = FetchArgs & {
+  prepareHeaders?: (headers: Headers) => Headers | Promise<Headers>;
+};
 const ACCESS_COOKIE = "access_token";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001";
-const COMPANY_BASE = process.env.NEXT_PUBLIC_COMPANY_URL || "http://localhost:8002";
+const COMPANY_BASE =
+  process.env.NEXT_PUBLIC_COMPANY_URL || "http://localhost:8002";
 export const baseUrl = `${BASE}/api/v1/`;
 export const companyUrl = `${COMPANY_BASE}/api/v1/`;
 
 const isFormData = (v: unknown): v is FormData => {
   return typeof FormData !== "undefined" && v instanceof FormData;
 };
-
-// helper to validate cookie values (ignore "undefined" string)
 const validCookie = (v: string | undefined | null) => !!v && v !== "undefined";
 
-const prepareHeaders = (headers: Headers, { getState }: { getState: () => unknown }) => {
+const prepareHeaders = (
+  headers: Headers,
+  { getState }: { getState: () => unknown },
+) => {
   const tokenFromStore = (getState() as RootState).auth?.accessToken || null;
   // backend sometimes sets cookie named "access" (check both)
-  const serverCookie = typeof window !== "undefined" ? Cookies.get("access") || null : null;
-  const clientCookie = typeof window !== "undefined" ? Cookies.get(ACCESS_COOKIE) || null : null;
+  const serverCookie =
+    typeof window !== "undefined" ? Cookies.get("access") || null : null;
+  const clientCookie =
+    typeof window !== "undefined" ? Cookies.get(ACCESS_COOKIE) || null : null;
 
   const token =
     tokenFromStore ||
-    (validCookie(serverCookie) ? serverCookie : validCookie(clientCookie) ? clientCookie : null);
+    (validCookie(serverCookie)
+      ? serverCookie
+      : validCookie(clientCookie)
+        ? clientCookie
+        : null);
 
   if (typeof window !== "undefined") {
-    // debug to see what's happening on first reload - remove later
-    // eslint-disable-next-line no-console
-    console.debug("[prepareHeaders] tokens:", { tokenFromStore: !!tokenFromStore, serverCookie: !!serverCookie, clientCookie: !!clientCookie });
+    console.debug("[prepareHeaders] tokens:", {
+      tokenFromStore: !!tokenFromStore,
+      serverCookie: !!serverCookie,
+      clientCookie: !!clientCookie,
+    });
   }
 
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -65,39 +77,25 @@ const companyFetch = fetchBaseQuery({
 });
 
 const formAwareBase =
-  (base: ReturnType<typeof fetchBaseQuery>): BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =>
-  async (args, api, extraOptions) => {
-    const modified = typeof args === "string" ? args : ({ ...args } as FetchArgs);
-    if (typeof modified !== "string" && isFormData(modified.body)) {
-      // override prepareHeaders for this call so Content-Type isn't forced; still attach Authorization
-      // @ts-ignore
-      modified.prepareHeaders = (headers: Headers) => {
-        const tokenFromStore = (api.getState() as RootState).auth?.accessToken || null;
-        const serverCookie = typeof window !== "undefined" ? Cookies.get("access") || null : null;
-        const clientCookie = typeof window !== "undefined" ? Cookies.get(ACCESS_COOKIE) || null : null;
-        const token =
-          tokenFromStore ||
-          (validCookie(serverCookie) ? serverCookie : validCookie(clientCookie) ? clientCookie : null);
+  (base: ReturnType<typeof fetchBaseQuery>) =>
+  async (args: string | FetchArgs, api: any, extraOptions: any) => {
+    const modified = typeof args === "string" ? args : ({ ...args } as FetchArgsWithPrepare);
 
+    if (typeof modified !== "string" && isFormData((modified as any).body)) {
+      modified.prepareHeaders = (headers: Headers) => {
+        const token = (api.getState() as RootState).auth.accessToken;
         if (token) headers.set("Authorization", `Bearer ${token}`);
         return headers;
       };
     }
-    // @ts-ignore
-    return base(modified, api, extraOptions);
+    return base(modified as unknown as FetchArgs, api, extraOptions);
   };
 
 const baseQueryWithForm = formAwareBase(baseFetch);
 const companyQueryWithForm = formAwareBase(companyFetch);
 
-/**
- * Mutex for single-refresh semantics
- */
 const mutex = new Mutex();
 
-/**
- * Reauth wrapper
- */
 const withReauth =
   (queryFn: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError>) =>
   async (args: string | FetchArgs, api: any, extraOptions: any) => {
@@ -129,7 +127,6 @@ const withReauth =
       } else {
         await mutex.waitForUnlock();
       }
-      // retry original
       result = await queryFn(args, api, extraOptions);
     }
     return result;
@@ -137,137 +134,152 @@ const withReauth =
 
 const baseQueryWithReauth = withReauth(baseQueryWithForm);
 const companyQueryWithReauth = withReauth(companyQueryWithForm);
-
-/**
- * Create API slice.
- */
 export const apiSlice = createApi({
   reducerPath: "api",
   baseQuery: baseQueryWithReauth,
-  tagTypes: ["Me", "Company", "CompanySettings", "Nav", "Users", "Roles", "Inventory", "Product", "Account"],
+  tagTypes: [
+    "Me",
+    "Company",
+    "CompanySettings",
+    "Nav",
+    "Users",
+    "Roles",
+    "Inventory",
+    "Product",
+    "Account",
+  ],
   endpoints: (builder) => ({
     // AUTH
-    login: builder.mutation<{ access: string; refresh?: string }, { username?: string; email?: string; password: string }>({
+    login: builder.mutation<
+      { access: string; refresh?: string },
+      { username?: string; email?: string; password: string }
+    >({
       query: (body) => ({ url: "token/", method: "POST", body }),
       async onQueryStarted(arg, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
           if (data) {
-            if (data.access && data.access !== "undefined") dispatch(setAccessToken(data.access));
-            if (data.refresh && data.refresh !== "undefined") dispatch(setRefreshToken(data.refresh));
+            if (data.access && data.access !== "undefined")
+              dispatch(setAccessToken(data.access));
+            if (data.refresh && data.refresh !== "undefined")
+              dispatch(setRefreshToken(data.refresh));
           }
         } catch (err) {
           // ignore
         }
       },
     }),
+    passwordreset: builder.mutation({
+      query: (body) => ({ url: "password-reset/", method: "POST", body }),
+    }),
+    passwordresetconfirm: builder.mutation({
+      query: (body) => ({
+        url: "password-reset/confirm/",
+        method: "POST",
+        body,
+      }),
+    }),
     logout: builder.mutation<void, void>({
       query: () => ({ url: "logout/", method: "POST" }),
       async onQueryStarted(_, { dispatch, queryFulfilled }) {
         try {
           await queryFulfilled;
-        } catch {}
-        finally {
+        } catch {
+        } finally {
           dispatch(clearAuth());
           dispatch(apiSlice.util.resetApiState());
         }
       },
     }),
-    
+
     whoami: builder.query<User, void>({
       query: () => "whoami/",
       providesTags: ["Me"],
     }),
-
-    // COMPANY ENDPOINTS - Using query instead of queryFn for simpler endpoints
     getCompany: builder.query<Company, string>({
       query: (companyId) => `companies/${companyId}/`,
       providesTags: (result, error, companyId) => [
-        { type: "Company", id: companyId }
+        { type: "Company", id: companyId },
       ],
     }),
-    
-    updateCompany: builder.mutation<Company, { id: string; data: Partial<Company> }>({
+
+    updateCompany: builder.mutation<
+      Company,
+      { id: string; data: Partial<Company> }
+    >({
       query: ({ id, data }) => ({
         url: `companies/${id}/`,
         method: "PATCH",
         body: data,
       }),
-      invalidatesTags: (result, error, { id }) => [
-        { type: "Company", id }
-      ],
+      invalidatesTags: (result, error, { id }) => [{ type: "Company", id }],
     }),
-
-    // FIXED: Properly typed queryFn for company settings
     getCompanySettings: builder.query<CompanySettings, string>({
       queryFn: async (companyId, api, extraOptions, baseQuery) => {
         try {
           const result = await companyQueryWithReauth(
-            { 
-              url: `companies-settings-view/${companyId}/settings/`, 
-              method: "GET" 
+            {
+              url: `companies-settings-view/${companyId}/settings/`,
+              method: "GET",
             },
             api,
             extraOptions,
           );
-          
+
           if (result.error) {
             return { error: result.error };
           }
-          
-          // Properly type the response
-          return { 
-            data: result.data as CompanySettings 
+          return {
+            data: result.data as CompanySettings,
           };
         } catch (error) {
-          return { 
-            error: { 
-              status: 'CUSTOM_ERROR', 
-              error: 'Failed to fetch company settings' 
-            } as FetchBaseQueryError 
+          return {
+            error: {
+              status: "CUSTOM_ERROR",
+              error: "Failed to fetch company settings",
+            } as FetchBaseQueryError,
           };
         }
       },
       providesTags: ["CompanySettings"],
     }),
-
-    // FIXED: Properly typed mutation for company settings
-    updateCompanySettings: builder.mutation<CompanySettings, { 
-      company_id: string; 
-      data: FormData | Partial<CompanySettings> 
-    }>({
+    updateCompanySettings: builder.mutation<
+      CompanySettings,
+      {
+        company_id: string;
+        data: FormData | Partial<CompanySettings>;
+      }
+    >({
       queryFn: async ({ company_id, data }, api, extraOptions, baseQuery) => {
         try {
           const result = await companyQueryWithReauth(
-            { 
-              url: `companies-settings-view/${company_id}/settings/`, 
-              method: "PUT", 
-              body: data 
+            {
+              url: `companies-settings-view/${company_id}/settings/`,
+              method: "PUT",
+              body: data,
             },
             api,
             extraOptions,
           );
-          
+
           if (result.error) {
             return { error: result.error };
           }
-          
-          return { 
-            data: result.data as CompanySettings 
+
+          return {
+            data: result.data as CompanySettings,
           };
         } catch (error) {
-          return { 
-            error: { 
-              status: 'CUSTOM_ERROR', 
-              error: 'Failed to update company settings' 
-            } as FetchBaseQueryError 
+          return {
+            error: {
+              status: "CUSTOM_ERROR",
+              error: "Failed to update company settings",
+            } as FetchBaseQueryError,
           };
         }
       },
       invalidatesTags: ["CompanySettings"],
     }),
-
-    // NAV ENDPOINTS - Using queryFn pattern
     getCompanyNav: builder.query<NavItem[], string>({
       queryFn: async (companyId, api, extraOptions, baseQuery) => {
         const result = await companyQueryWithReauth(
@@ -275,38 +287,39 @@ export const apiSlice = createApi({
           api,
           extraOptions,
         );
-        
+
         if (result.error) {
           return { error: result.error };
         }
-        
-        return { 
-          data: result.data as NavItem[] 
+
+        return {
+          data: result.data as NavItem[],
         };
       },
       providesTags: ["Nav"],
     }),
 
-    createCompanyNav: builder.mutation<NavItem, { company_id: string; data: Partial<NavItem> }>({
+    createCompanyNav: builder.mutation<
+      NavItem,
+      { company_id: string; data: Partial<NavItem> }
+    >({
       queryFn: async ({ company_id, data }, api, extraOptions, baseQuery) => {
         const result = await companyQueryWithReauth(
           { url: `companies/${company_id}/nav/`, method: "POST", body: data },
           api,
           extraOptions,
         );
-        
+
         if (result.error) {
           return { error: result.error };
         }
-        
-        return { 
-          data: result.data as NavItem 
+
+        return {
+          data: result.data as NavItem,
         };
       },
       invalidatesTags: ["Nav"],
     }),
-
-    // SIMPLE ENDPOINTS using main API (no queryFn needed)
     getUsers: builder.query<User[], void>({
       query: () => "users/",
       providesTags: ["Users"],
@@ -342,8 +355,6 @@ export const apiSlice = createApi({
       }),
       invalidatesTags: ["Users"],
     }),
-
-    // ROLES
     getRoles: builder.query<Role[], void>({
       query: () => "roles/",
       providesTags: ["Roles"],
@@ -384,6 +395,8 @@ export const apiSlice = createApi({
 
 export const {
   useLoginMutation,
+  usePasswordresetMutation, 
+  usePasswordresetconfirmMutation,
   useLogoutMutation,
   useWhoamiQuery,
   useGetCompanyQuery,

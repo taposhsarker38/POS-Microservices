@@ -1,4 +1,4 @@
-// src/components/ui/PasswordInput.tsx
+
 "use client";
 
 import React, { useState } from "react";
@@ -6,12 +6,9 @@ import { Eye, EyeOff } from "lucide-react";
 
 type Props = React.InputHTMLAttributes<HTMLInputElement> & { label?: string };
 
-// forwardRef needed so react-hook-form's register().ref reaches the real <input>
 const PasswordInput = React.forwardRef<HTMLInputElement, Props>(
   ({ label = "Password", id, ...props }, ref) => {
     const [show, setShow] = useState(false);
-
-    // prefer using id prop passed from parent (or fallback to name if provided)
     const inputId = id ?? (props.name as string | undefined) ?? "password";
 
     return (

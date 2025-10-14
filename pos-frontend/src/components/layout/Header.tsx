@@ -1,4 +1,3 @@
-// src/components/HeaderWithSettings.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -164,7 +163,7 @@ export default function HeaderWithSettings() {
   };
 
   if (meLoading || companyLoading || settingsLoading) {
-    return <header className="w-full border-b h-16" />; // Placeholder
+    return <header className="w-full border-b h-16" />; 
   }
 
   return (
@@ -173,9 +172,7 @@ export default function HeaderWithSettings() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
 
-            {/* LEFT: mobile-only brand + mobile menu button */}
             <div className="flex items-center gap-3">
-              {/* Mobile menu button (visible on mobile) */}
               <button
                 className="sm:hidden p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
                 onClick={() => setMobileMenuOpen(true)}

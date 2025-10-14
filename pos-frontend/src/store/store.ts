@@ -1,4 +1,4 @@
-// src/store.ts
+
 import { configureStore } from "@reduxjs/toolkit";
 import authReducer from "./authSlice";
 import { apiSlice } from "./api";
@@ -12,6 +12,5 @@ export const store = configureStore({
     getDefaultMiddleware().concat(apiSlice.middleware),
 });
 
-// types
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

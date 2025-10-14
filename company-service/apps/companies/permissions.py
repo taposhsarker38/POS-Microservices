@@ -1,4 +1,4 @@
-# company-service/apps/common/permissions.py
+
 from rest_framework.permissions import BasePermission
 
 class HasPermission(BasePermission):
@@ -7,10 +7,8 @@ class HasPermission(BasePermission):
         if not required:
             return True
         token = getattr(request, 'auth', None)
-        # For SimpleJWT, request.auth behaves like a dict-like token, try to read permissions
         perms = None
         try:
-            # token may be an instance with .payload or mapping
             if hasattr(token, 'get'):
                 perms = token.get('permissions')
             elif hasattr(token, 'payload'):
