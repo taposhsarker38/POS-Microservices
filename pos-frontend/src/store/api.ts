@@ -197,22 +197,53 @@ export const apiSlice = createApi({
       providesTags: ["Me"],
     }),
     getCompany: builder.query<Company, string>({
-      query: (companyId) => `companies/${companyId}/`,
-      providesTags: (result, error, companyId) => [
-        { type: "Company", id: companyId },
-      ],
+      query: (id) => `companies/${id}/`,
+      providesTags: ['Company'],
+    }),
+    getCompanies: builder.query<Company[], void>({
+      queryFn: async (arg, api, extraOptions) => {
+        const result = await companyQueryWithReauth({ url: 'companies/' }, api, extraOptions);
+        if (result.error) return { error: result.error };
+        return { data: result.data as Company[], meta: result.meta };
+      },
+      providesTags: ['Company'],
+    }),
+     createCompany: builder.mutation<Company, Partial<Company>>({
+      queryFn: async (data, api, extraOptions) => {
+        const result = await companyQueryWithReauth({ 
+          url: 'companies/', 
+          method: 'POST', 
+          body: data 
+        }, api, extraOptions);
+        if (result.error) return { error: result.error };
+        return { data: result.data as Company, meta: result.meta };
+      },
+      invalidatesTags: ['Company'],
     }),
 
-    updateCompany: builder.mutation<
-      Company,
-      { id: string; data: Partial<Company> }
-    >({
-      query: ({ id, data }) => ({
-        url: `companies/${id}/`,
-        method: "PATCH",
-        body: data,
-      }),
-      invalidatesTags: (result, error, { id }) => [{ type: "Company", id }],
+    updateCompany: builder.mutation<Company, { id: string; data: Partial<Company> }>({
+      queryFn: async ({ id, data }, api, extraOptions) => {
+        const result = await companyQueryWithReauth({ 
+          url: `companies/${id}/`, 
+          method: 'PATCH', 
+          body: data 
+        }, api, extraOptions);
+        if (result.error) return { error: result.error };
+        return { data: result.data as Company, meta: result.meta };
+      },
+      invalidatesTags: ['Company'],
+    }),
+
+    deleteCompany: builder.mutation<void, string>({
+      queryFn: async (id, api, extraOptions) => {
+        const result = await companyQueryWithReauth({ 
+          url: `companies/${id}/`, 
+          method: 'DELETE' 
+        }, api, extraOptions);
+        if (result.error) return { error: result.error };
+        return { data: undefined };
+      },
+      invalidatesTags: ['Company'],
     }),
     getCompanySettings: builder.query<CompanySettings, string>({
       queryFn: async (companyId, api, extraOptions, baseQuery) => {
@@ -220,65 +251,49 @@ export const apiSlice = createApi({
           const result = await companyQueryWithReauth(
             {
               url: `companies-settings-view/${companyId}/settings/`,
-              method: "GET",
+              method: 'GET',
             },
             api,
             extraOptions,
           );
-
           if (result.error) {
             return { error: result.error };
           }
-          return {
-            data: result.data as CompanySettings,
-          };
+          return { data: result.data as CompanySettings };
         } catch (error) {
           return {
-            error: {
-              status: "CUSTOM_ERROR",
-              error: "Failed to fetch company settings",
-            } as FetchBaseQueryError,
+            error: { status: 'CUSTOM_ERROR', error: 'Failed to fetch company settings' } as FetchBaseQueryError,
           };
         }
       },
-      providesTags: ["CompanySettings"],
+      providesTags: ['CompanySettings'],
     }),
     updateCompanySettings: builder.mutation<
       CompanySettings,
-      {
-        company_id: string;
-        data: FormData | Partial<CompanySettings>;
-      }
+      { company_id: string; data: FormData | Partial<CompanySettings> }
     >({
       queryFn: async ({ company_id, data }, api, extraOptions, baseQuery) => {
         try {
           const result = await companyQueryWithReauth(
             {
               url: `companies-settings-view/${company_id}/settings/`,
-              method: "PUT",
+              method: 'PUT',
               body: data,
             },
             api,
             extraOptions,
           );
-
           if (result.error) {
             return { error: result.error };
           }
-
-          return {
-            data: result.data as CompanySettings,
-          };
+          return { data: result.data as CompanySettings };
         } catch (error) {
           return {
-            error: {
-              status: "CUSTOM_ERROR",
-              error: "Failed to update company settings",
-            } as FetchBaseQueryError,
+            error: { status: 'CUSTOM_ERROR', error: 'Failed to update company settings' } as FetchBaseQueryError,
           };
         }
       },
-      invalidatesTags: ["CompanySettings"],
+      invalidatesTags: ['CompanySettings'],
     }),
     getCompanyNav: builder.query<NavItem[], string>({
       queryFn: async (companyId, api, extraOptions, baseQuery) => {
@@ -399,10 +414,13 @@ export const {
   usePasswordresetconfirmMutation,
   useLogoutMutation,
   useWhoamiQuery,
-  useGetCompanyQuery,
   useUpdateCompanyMutation,
   useGetCompanySettingsQuery,
   useUpdateCompanySettingsMutation,
+  useGetCompaniesQuery, 
+  useGetCompanyQuery,            
+  useCreateCompanyMutation,        
+  useDeleteCompanyMutation,       
   useGetCompanyNavQuery,
   useCreateCompanyNavMutation,
   useGetUsersQuery,

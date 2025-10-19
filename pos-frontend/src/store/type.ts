@@ -11,17 +11,38 @@ export interface NavItem {
   created_at?: string;
 }
 
-export interface Company {
-  id?: string;
+export type Company = {
+  id: string;
   name: string;
-  // extend as needed
-}
+  code: string;
+  tax_number?: string;
+  vat_rate?: string;
+  bin_number?: string;
+  accounting_codes?: Record<string, any>;
+  default_payment_terms?: string;
+  address?: string;
+  timezone?: string;
+  metadata?: Record<string, any>;
+  created_at: string;
+};
 
-export interface CompanySettings {
-  logo?: string | null;
-  primary_color?: string | null;
-  // extend as needed
-}
+export type CompanySettings = {
+  id?: string;
+  company: string;
+  primary_color?: string;
+  secondary_color?: string;
+  accent_color?: string;
+  background_color?: string;
+  text_color?: string;
+  logo?: string;
+  logo_dark?: string;
+  favicon?: string;
+  nav?: any[];
+  metadata?: Record<string, any>;
+  feature_flags?: Record<string, any>;
+  ui_schema?: Record<string, any>;
+  updated_at?: string;
+};
 
 export interface User {
   id: string;
