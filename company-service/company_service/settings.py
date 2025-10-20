@@ -134,6 +134,13 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+  "https://app.example.com",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+]
 
 # audit config
 AUTH_SERVICE_AUDIT_URL = os.getenv('AUTH_SERVICE_AUDIT_URL','http://auth-web:8001/api/v1/audit/')

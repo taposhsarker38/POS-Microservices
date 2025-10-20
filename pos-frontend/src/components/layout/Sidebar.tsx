@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -25,9 +26,11 @@ import {
   Menu as MenuIcon,
   X as XIcon,
 } from "lucide-react";
+import { useRouter } from 'next/navigation'; 
 import { useWhoamiQuery, useGetCompanyQuery, useGetCompanySettingsQuery, useGetCompanyNavQuery } from "@/store/api";
 import { skipToken } from '@reduxjs/toolkit/query/react';
 import type { NavItem, Company, CompanySettings, User } from "@/store/type";
+import Link from "next/link";
 
 type SidebarProps = {
   activePath?: string;
@@ -68,6 +71,7 @@ export default function ModernSidebar({
   activePath = "/dashboard",
   onNavigate,
 }: SidebarProps) {
+  const router = useRouter(); // Updated for App Router
   const { data: me, isLoading: meLoading, error: meError } = useWhoamiQuery();
 
   // Debug logs (remove in prod)
@@ -77,7 +81,8 @@ export default function ModernSidebar({
       isLoading: meLoading,
       error: meError,
     });
-  }, [me, meLoading, meError]);
+    console.log('🔍 Sidebar - Props:', { activePath, hasOnNavigate: !!onNavigate });
+  }, [me, meLoading, meError, activePath, onNavigate]);
 
   const { data: companyData } = useGetCompanyQuery((me as User | undefined)?.company_id ?? skipToken);
   const { data: settings } = useGetCompanySettingsQuery((me as User | undefined)?.company_id ?? skipToken);
@@ -87,6 +92,11 @@ export default function ModernSidebar({
   const navItems: NavItem[] = (navItemsRaw ?? []) as NavItem[];
 
   const isSuperuser = (me as User | undefined)?.is_superuser === true || (me as User | undefined)?.email === 'admin@example.com';
+
+  // Debug superuser
+  useEffect(() => {
+    console.log('🔍 Sidebar - isSuperuser:', isSuperuser, 'User:', me);
+  }, [me, isSuperuser]);
 
   const superuserItems: NavItem[] = isSuperuser ? [
     {
@@ -98,13 +108,13 @@ export default function ModernSidebar({
       created_at: new Date().toISOString(),
       children: [
         {
-        id: 'company-management',       
-        title: 'Company Management',     
-        path: '/admin/companies',         
-        order: 1,
-        metadata: {} as Record<string, any>,
-        created_at: new Date().toISOString(),
-      },
+          id: 'company-management',
+          title: 'Company Management',
+          path: '/admin/companies',
+          order: 1,
+          metadata: {} as Record<string, any>,
+          created_at: new Date().toISOString(),
+        },
         {
           id: 'users-management',
           title: 'User Management',
@@ -140,6 +150,7 @@ export default function ModernSidebar({
       ],
     },
   ] : [];
+
   const allNavItems: NavItem[] = [...navItems, ...superuserItems];
   const [collapsed, setCollapsed] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
@@ -151,6 +162,7 @@ export default function ModernSidebar({
       document.documentElement.style.setProperty("--primary", (settings as CompanySettings).primary_color as string);
     }
   }, [settings]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setMobileOpen(false);
@@ -169,12 +181,23 @@ export default function ModernSidebar({
   };
 
   const handleItemClick = (item: NavItem) => {
+    console.log('🖱️ Clicked:', item.title, { id: item.id, path: item.path, hasChildren: !!item.children?.length });
+    
     if (item.children?.length) {
+      console.log('📂 Toggling expand for:', item.id);
       toggleExpand(item.id);
-    } else if (onNavigate && item.path) {
-      onNavigate(item.path);
-      // on mobile, auto close when navigating
-      setMobileOpen(false);
+    } else if (item.path) {
+      // Prefer prop, fallback to router
+      if (onNavigate) {
+        console.log('🔗 Using onNavigate for:', item.path);
+        onNavigate(item.path);
+      } else {
+        console.log('⚠️ onNavigate missing, using router fallback for:', item.path);
+        router.push(item.path);
+      }
+      setMobileOpen(false); // Close mobile menu
+    } else {
+      console.log('❌ No path for navigation:', item.title);
     }
   };
 
@@ -281,10 +304,8 @@ export default function ModernSidebar({
       className="hidden sm:flex relative h-screen bg-gradient-to-b from-white via-slate-50 to-slate-100 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 border-r border-slate-200 dark:border-slate-800 shadow-xl flex-col"
     >
       <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
-        <motion.div
+        <Link href="/dashboard"
           className="flex items-center gap-3 cursor-pointer group"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
         >
           {(settings as CompanySettings | undefined)?.logo ? (
             <img
@@ -320,7 +341,7 @@ export default function ModernSidebar({
               </p>
             </motion.div>
           )}
-        </motion.div>
+        </Link>
 
         {!collapsed && (
           <motion.div
@@ -380,6 +401,7 @@ export default function ModernSidebar({
       </motion.button>
     </motion.aside>
   );
+
   const MobileToggleButton = (
     <button
       onClick={() => setMobileOpen(true)}
@@ -390,11 +412,11 @@ export default function ModernSidebar({
       <MenuIcon className="h-5 w-5 text-slate-700 dark:text-slate-200" />
     </button>
   );
+
   const MobileDrawer = (
     <AnimatePresence>
       {mobileOpen && (
         <>
-          {/* backdrop */}
           <motion.div
             key="backdrop"
             initial={{ opacity: 0 }}
@@ -405,8 +427,6 @@ export default function ModernSidebar({
             className="fixed inset-0 z-40 bg-black"
             aria-hidden
           />
-
-          {/* drawer */}
           <motion.aside
             key="drawer"
             initial={{ x: "-100%" }}
@@ -451,13 +471,8 @@ export default function ModernSidebar({
 
   return (
     <>
-      {/* Mobile toggle button */}
       {MobileToggleButton}
-
-      {/* Desktop */}
       {DesktopSidebar}
-
-      {/* Mobile drawer */}
       {MobileDrawer}
     </>
   );

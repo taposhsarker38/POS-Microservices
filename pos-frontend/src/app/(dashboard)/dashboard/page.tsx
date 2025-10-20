@@ -1,10 +1,6 @@
 "use client";
 import React from "react";
-import Sidebar from "../../components/layout/Sidebar";
-import Header from "../../components/layout/Header";
-// import {  useGetInventoryQuery } from "../../store/api";
-
-import { useSocket } from "../../hooks/useSocket";
+import { useSocket } from "../../../hooks/useSocket";
 
 export default function DashboardPage() {
 
@@ -13,9 +9,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen flex">
-      <Sidebar />
       <div className="flex-1">
-        <Header />
         <main className="p-6">
           <h2 className="text-xl font-semibold mb-4">Dashboard</h2>
           <section className="grid gap-6 grid-cols-1 md:grid-cols-2">

@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Building2, Save, Hash, FileText, MapPin, Globe } from 'lucide-react';
+import { X, Building2, Save, Hash, FileText, MapPin } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { toast } from 'react-hot-toast';
 
 interface Company {
   id?: string;
@@ -11,15 +15,31 @@ interface Company {
   bin_number?: string;
   default_payment_terms?: string;
   address?: string;
-  timezone?: string;
+  accounting_codes?: string;
 }
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   company?: Company | null;
-  onSave: (data: Company) => Promise<void>;
+  onSave: (data: Company) => Promise<{ success: boolean; message: string }>;
 }
+
+// Define validation schema using zod
+const companySchema = z.object({
+  name: z.string().min(1, 'Company name is required').max(100, 'Company name must be 100 characters or less'),
+  code: z.string().min(1, 'Company code is required').max(20, 'Company code must be 20 characters or less').regex(/^[A-Z0-9]+$/, 'Company code must be uppercase letters and numbers'),
+  tax_number: z.string().optional(),
+  vat_rate: z.string().optional().refine((val) => !val || (!isNaN(parseFloat(val)) && parseFloat(val) >= 0), {
+    message: 'VAT rate must be a valid number greater than or equal to 0',
+  }),
+  bin_number: z.string().optional(),
+  default_payment_terms: z.string().optional(),
+  address: z.string().optional(),
+  accounting_codes: z.string().optional(),
+});
+
+type CompanyFormData = z.infer<typeof companySchema>;
 
 export default function CompanyFormDialog({
   isOpen,
@@ -28,22 +48,35 @@ export default function CompanyFormDialog({
   onSave,
 }: Props) {
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState<Company>({
-    name: '',
-    code: '',
-    tax_number: '',
-    vat_rate: '0',
-    bin_number: '',
-    default_payment_terms: '',
-    address: '',
-    timezone: 'Asia/Dhaka',
+
+  const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm<CompanyFormData>({
+    resolver: zodResolver(companySchema),
+    defaultValues: {
+      name: '',
+      code: '',
+      tax_number: '',
+      vat_rate: '0',
+      bin_number: '',
+      default_payment_terms: '',
+      address: '',
+      accounting_codes: '',
+    },
   });
 
   useEffect(() => {
-    if (company) {
-      setFormData(company);
-    } else {
-      setFormData({
+    if (company && isOpen) {
+      // Pre-fill form with company data for updates
+      setValue('name', company.name || '');
+      setValue('code', company.code || '');
+      setValue('tax_number', company.tax_number || '');
+      setValue('vat_rate', company.vat_rate || '0');
+      setValue('bin_number', company.bin_number || '');
+      setValue('default_payment_terms', company.default_payment_terms || '');
+      setValue('address', company.address || '');
+      setValue('accounting_codes', company.accounting_codes || '');
+    } else if (isOpen) {
+      // Reset form for create
+      reset({
         name: '',
         code: '',
         tax_number: '',
@@ -51,24 +84,23 @@ export default function CompanyFormDialog({
         bin_number: '',
         default_payment_terms: '',
         address: '',
-        timezone: 'Asia/Dhaka',
+        accounting_codes: '',
       });
     }
-  }, [company, isOpen]);
+  }, [company, isOpen, setValue, reset]);
 
-  const handleSave = async () => {
-    if (!formData.name || !formData.code) {
-      alert('Please fill in required fields');
-      return;
-    }
-
+  const onSubmit = async (data: CompanyFormData) => {
     setSaving(true);
     try {
-      await onSave(formData);
-      onClose();
+      const result = await onSave(data);
+      if (result.success) {
+        toast.success(result.message);
+        onClose();
+      } else {
+        toast.error(result.message);
+      }
     } catch (error) {
-      console.error('Failed to save company:', error);
-      alert('Failed to save company');
+      toast.error('Unexpected error occurred');
     } finally {
       setSaving(false);
     }
@@ -119,7 +151,7 @@ export default function CompanyFormDialog({
           </div>
 
           {/* Form Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+          <form onSubmit={handleSubmit(onSubmit)} className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
             <div className="grid md:grid-cols-2 gap-6">
               {/* Company Name */}
               <div className="md:col-span-2">
@@ -129,12 +161,16 @@ export default function CompanyFormDialog({
                 <div className="relative">
                   <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                   <input
+                    {...register('name')}
                     type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="Enter company name"
-                    className="w-full pl-10 pr-4 py-3 border-2 border-slate-300 dark:border-slate-700 rounded-xl focus:border-indigo-500 dark:focus:border-indigo-400 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none transition-colors"
+                    className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none transition-colors ${
+                      errors.name ? 'border-red-500' : 'border-slate-300 dark:border-slate-700 focus:border-indigo-500 dark:focus:border-indigo-400'
+                    }`}
                   />
+                  {errors.name && (
+                    <p className="mt-1 text-sm text-red-500">{errors.name.message}</p>
+                  )}
                 </div>
               </div>
 
@@ -146,12 +182,16 @@ export default function CompanyFormDialog({
                 <div className="relative">
                   <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                   <input
+                    {...register('code')}
                     type="text"
-                    value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                     placeholder="COMP001"
-                    className="w-full pl-10 pr-4 py-3 border-2 border-slate-300 dark:border-slate-700 rounded-xl focus:border-indigo-500 dark:focus:border-indigo-400 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none transition-colors font-mono"
+                    className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl font-mono bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none transition-colors ${
+                      errors.code ? 'border-red-500' : 'border-slate-300 dark:border-slate-700 focus:border-indigo-500 dark:focus:border-indigo-400'
+                    }`}
                   />
+                  {errors.code && (
+                    <p className="mt-1 text-sm text-red-500">{errors.code.message}</p>
+                  )}
                 </div>
               </div>
 
@@ -163,9 +203,8 @@ export default function CompanyFormDialog({
                 <div className="relative">
                   <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                   <input
+                    {...register('tax_number')}
                     type="text"
-                    value={formData.tax_number}
-                    onChange={(e) => setFormData({ ...formData, tax_number: e.target.value })}
                     placeholder="TAX123456"
                     className="w-full pl-10 pr-4 py-3 border-2 border-slate-300 dark:border-slate-700 rounded-xl focus:border-indigo-500 dark:focus:border-indigo-400 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none transition-colors"
                   />
@@ -178,9 +217,8 @@ export default function CompanyFormDialog({
                   BIN Number
                 </label>
                 <input
+                  {...register('bin_number')}
                   type="text"
-                  value={formData.bin_number}
-                  onChange={(e) => setFormData({ ...formData, bin_number: e.target.value })}
                   placeholder="BIN123456"
                   className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 rounded-xl focus:border-indigo-500 dark:focus:border-indigo-400 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none transition-colors"
                 />
@@ -192,13 +230,17 @@ export default function CompanyFormDialog({
                   VAT Rate (%)
                 </label>
                 <input
+                  {...register('vat_rate')}
                   type="number"
                   step="0.01"
-                  value={formData.vat_rate}
-                  onChange={(e) => setFormData({ ...formData, vat_rate: e.target.value })}
                   placeholder="0.00"
-                  className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 rounded-xl focus:border-indigo-500 dark:focus:border-indigo-400 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none transition-colors"
+                  className={`w-full px-4 py-3 border-2 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none transition-colors ${
+                    errors.vat_rate ? 'border-red-500' : 'border-slate-300 dark:border-slate-700 focus:border-indigo-500 dark:focus:border-indigo-400'
+                  }`}
                 />
+                {errors.vat_rate && (
+                  <p className="mt-1 text-sm text-red-500">{errors.vat_rate.message}</p>
+                )}
               </div>
 
               {/* Payment Terms */}
@@ -207,9 +249,8 @@ export default function CompanyFormDialog({
                   Default Payment Terms
                 </label>
                 <input
+                  {...register('default_payment_terms')}
                   type="text"
-                  value={formData.default_payment_terms}
-                  onChange={(e) => setFormData({ ...formData, default_payment_terms: e.target.value })}
                   placeholder="Net 30 days"
                   className="w-full px-4 py-3 border-2 border-slate-300 dark:border-slate-700 rounded-xl focus:border-indigo-500 dark:focus:border-indigo-400 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none transition-colors"
                 />
@@ -223,37 +264,15 @@ export default function CompanyFormDialog({
                 <div className="relative">
                   <MapPin className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
                   <textarea
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    {...register('address')}
                     placeholder="Enter company address"
                     rows={3}
                     className="w-full pl-10 pr-4 py-3 border-2 border-slate-300 dark:border-slate-700 rounded-xl focus:border-indigo-500 dark:focus:border-indigo-400 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none transition-colors resize-none"
                   />
                 </div>
               </div>
-
-              {/* Timezone */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  Timezone
-                </label>
-                <div className="relative">
-                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                  <select
-                    value={formData.timezone}
-                    onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
-                    className="w-full pl-10 pr-4 py-3 border-2 border-slate-300 dark:border-slate-700 rounded-xl focus:border-indigo-500 dark:focus:border-indigo-400 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none transition-colors"
-                  >
-                    <option value="Asia/Dhaka">Asia/Dhaka (GMT+6)</option>
-                    <option value="UTC">UTC (GMT+0)</option>
-                    <option value="America/New_York">America/New_York (GMT-5)</option>
-                    <option value="Europe/London">Europe/London (GMT+0)</option>
-                    <option value="Asia/Tokyo">Asia/Tokyo (GMT+9)</option>
-                  </select>
-                </div>
-              </div>
             </div>
-          </div>
+          </form>
 
           {/* Footer */}
           <div className="border-t border-slate-200 dark:border-slate-700 p-6 bg-slate-50 dark:bg-slate-800/50">
@@ -265,7 +284,7 @@ export default function CompanyFormDialog({
                 Cancel
               </button>
               <button
-                onClick={handleSave}
+                onClick={handleSubmit(onSubmit)}
                 disabled={saving}
                 className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
