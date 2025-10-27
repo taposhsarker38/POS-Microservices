@@ -5,39 +5,8 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'react-hot-toast';
-
-interface Company {
-  id?: string;
-  name: string;
-  code: string;
-  tax_number?: string;
-  vat_rate?: string;
-  bin_number?: string;
-  default_payment_terms?: string;
-  address?: string;
-  accounting_codes?: string;
-}
-
-interface Props {
-  isOpen: boolean;
-  onClose: () => void;
-  company?: Company | null;
-  onSave: (data: Company) => Promise<{ success: boolean; message: string }>;
-}
-
-// Define validation schema using zod
-const companySchema = z.object({
-  name: z.string().min(1, 'Company name is required').max(100, 'Company name must be 100 characters or less'),
-  code: z.string().min(1, 'Company code is required').max(20, 'Company code must be 20 characters or less').regex(/^[A-Z0-9]+$/, 'Company code must be uppercase letters and numbers'),
-  tax_number: z.string().optional(),
-  vat_rate: z.string().optional().refine((val) => !val || (!isNaN(parseFloat(val)) && parseFloat(val) >= 0), {
-    message: 'VAT rate must be a valid number greater than or equal to 0',
-  }),
-  bin_number: z.string().optional(),
-  default_payment_terms: z.string().optional(),
-  address: z.string().optional(),
-  accounting_codes: z.string().optional(),
-});
+import { Props } from '@/store/type';
+import { companySchema } from '@/lib/schema';
 
 type CompanyFormData = z.infer<typeof companySchema>;
 
@@ -65,7 +34,6 @@ export default function CompanyFormDialog({
 
   useEffect(() => {
     if (company && isOpen) {
-      // Pre-fill form with company data for updates
       setValue('name', company.name || '');
       setValue('code', company.code || '');
       setValue('tax_number', company.tax_number || '');
@@ -73,7 +41,7 @@ export default function CompanyFormDialog({
       setValue('bin_number', company.bin_number || '');
       setValue('default_payment_terms', company.default_payment_terms || '');
       setValue('address', company.address || '');
-      setValue('accounting_codes', company.accounting_codes || '');
+      setValue('accounting_codes', company.accounting_codes ?? '')
     } else if (isOpen) {
       // Reset form for create
       reset({
@@ -92,7 +60,11 @@ export default function CompanyFormDialog({
   const onSubmit = async (data: CompanyFormData) => {
     setSaving(true);
     try {
-      const result = await onSave(data);
+      const result = await onSave({
+      ...data,
+      id: company?.id || '', 
+      created_at: company?.created_at || '', 
+    });
       if (result.success) {
         toast.success(result.message);
         onClose();

@@ -73,17 +73,6 @@ export default function ModernSidebar({
 }: SidebarProps) {
   const router = useRouter(); // Updated for App Router
   const { data: me, isLoading: meLoading, error: meError } = useWhoamiQuery();
-
-  // Debug logs (remove in prod)
-  useEffect(() => {
-    console.log('🔍 Sidebar - useWhoamiQuery state:', {
-      data: me,
-      isLoading: meLoading,
-      error: meError,
-    });
-    console.log('🔍 Sidebar - Props:', { activePath, hasOnNavigate: !!onNavigate });
-  }, [me, meLoading, meError, activePath, onNavigate]);
-
   const { data: companyData } = useGetCompanyQuery((me as User | undefined)?.company_id ?? skipToken);
   const { data: settings } = useGetCompanySettingsQuery((me as User | undefined)?.company_id ?? skipToken);
   const { data: navItemsRaw } = useGetCompanyNavQuery((me as User | undefined)?.company_id ?? skipToken);
@@ -110,10 +99,26 @@ export default function ModernSidebar({
         {
           id: 'company-management',
           title: 'Company Management',
-          path: '/admin/companies',
+          path: null,
           order: 1,
-          metadata: {} as Record<string, any>,
-          created_at: new Date().toISOString(),
+          children: [
+            {
+              id: 'company-add',
+              title: 'Company',
+              path: '/admin/companies',
+              order: 1,
+              metadata: {} as Record<string, any>,
+              created_at: new Date().toISOString(),
+            },
+            {
+              id: 'company-wings',
+              title: 'Company Wings',
+              path: '/admin/wings',
+              order: 2,
+              metadata: {} as Record<string, any>,
+              created_at: new Date().toISOString(),
+            },
+          ],
         },
         {
           id: 'users-management',
@@ -219,7 +224,7 @@ export default function ModernSidebar({
           whileHover={{ scale: 1.02, x: 4 }}
           whileTap={{ scale: 0.98 }}
           className={`
-            w-full flex items-center gap-3 ${depth === 0 ? "px-3" : `pl-${3 + depth * 4}`} py-3 rounded-xl transition-all duration-200 group relative
+            w-full flex items-center gap-3 px-1 ${depth === 0 ? "px-0" : `pl-${4 + depth * 4}`} py-1 rounded-xl transition-all duration-200 group relative
             ${isActive 
               ? isAdminItem 
                 ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/30" 
@@ -230,7 +235,7 @@ export default function ModernSidebar({
         >
           <div
             className={`
-              h-9 w-9 rounded-lg flex items-center justify-center transition-all text-white
+              h-6 w-6 rounded-lg flex items-center justify-center transition-all text-white
               ${isActive 
                 ? "bg-white/20" 
                 : isAdminItem
@@ -239,7 +244,7 @@ export default function ModernSidebar({
               }
             `}
           >
-            <Icon className="h-5 w-5" />
+            <Icon size={13} />
           </div>
 
           <AnimatePresence mode="wait">
@@ -262,7 +267,7 @@ export default function ModernSidebar({
           {isActive && (
             <motion.div
               layoutId="activeIndicator"
-              className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white rounded-l-full"
+              className="absolute right-0.5 top-0 -translate-y-1/2 w-1 h-8 bg-white rounded-r-[100%]"
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
             />
           )}
@@ -303,7 +308,7 @@ export default function ModernSidebar({
       transition={{ duration: 0.3, ease: "easeInOut" }}
       className="hidden sm:flex relative h-screen bg-gradient-to-b from-white via-slate-50 to-slate-100 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 border-r border-slate-200 dark:border-slate-800 shadow-xl flex-col"
     >
-      <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm ">
         <Link href="/dashboard"
           className="flex items-center gap-3 cursor-pointer group"
         >

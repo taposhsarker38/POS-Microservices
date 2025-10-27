@@ -13,29 +13,7 @@ import { Toaster } from 'react-hot-toast';
 import CompanyFormDialog from '@/components/Companies/CompanyFormDialog';
 import CompanySettingsDialog from '@/components/Companies/CompanySettingsDialog';
 import CompanyTable from '@/components/Companies/CompanyTable';
-
-// Define types for API responses and errors
-interface ApiResponse {
-  message?: string;
-  data?: any;
-}
-
-interface ApiError {
-  data?: {
-    message?: string;
-    code?: string[];
-  };
-  status?: number;
-}
-
-interface Company {
-  id: string;
-  name: string;
-  code: string;
-  tax_number?: string;
-  address?: string;
-  created_at: string;
-}
+import { Company, ApiResponse,ApiError } from '@/store/type';
 
 export default function CompaniesPage() {
   const { data: companies = [], isLoading } = useGetCompaniesQuery();

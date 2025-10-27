@@ -14,7 +14,7 @@ import clsx from "clsx";
 import PasswordInput from "@/components/ui/PasswordInput";
 import AuthLayout, { type AuthLayoutWeatherProps } from "@/components/layout/AuthLayout";
 import type { RootState } from "@/store/store";
-
+import { LoginSchema } from "@/lib/schema";
 const SpinnerCentered: React.FC<{ message?: string }> = ({ message = "Loading…" }) => (
   <div className="min-h-screen flex items-center justify-center">
     <div className="flex flex-col items-center gap-3">
@@ -27,10 +27,7 @@ const SpinnerCentered: React.FC<{ message?: string }> = ({ message = "Loading…
   </div>
 );
 
-const LoginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
+
 
 type LoginInput = z.infer<typeof LoginSchema>;
 

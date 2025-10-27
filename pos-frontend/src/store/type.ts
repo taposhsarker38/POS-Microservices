@@ -18,7 +18,7 @@ export type Company = {
   tax_number?: string;
   vat_rate?: string;
   bin_number?: string;
-  accounting_codes?: Record<string, any>;
+  accounting_codes?: string;
   default_payment_terms?: string;
   address?: string;
   timezone?: string;
@@ -43,6 +43,34 @@ export type CompanySettings = {
   ui_schema?: Record<string, any>;
   updated_at?: string;
 };
+export interface CompanyTableProps {
+  companies: Company[];
+  isLoading: boolean;
+  searchTerm: string;
+  onEdit: (company: Company) => void;
+  onSettings: (company: Company) => void;
+  onDelete: (id: string) => Promise<void>;
+}
+export interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  company?: Company | null;
+  onSave: (data: Company) => Promise<{ success: boolean; message: string }>;
+}
+
+export interface ApiResponse {
+  message?: string;
+  data?: any;
+}
+
+export interface ApiError {
+  data?: {
+    message?: string;
+    code?: string[];
+  };
+  status?: number;
+}
+
 
 export interface User {
   id: string;
@@ -74,3 +102,7 @@ export interface AuthState {
   isAuthenticated: boolean;
   isInitialized: boolean;
 }
+export interface ResetForm { 
+  password: string; 
+  passwordConfirm: string;
+};

@@ -1,24 +1,6 @@
 import { motion } from 'framer-motion';
 import { Edit, Settings, MapPin, Calendar, Trash2, Building2 } from 'lucide-react';
-
-interface Company {
-  id: string;
-  name: string;
-  code: string;
-  tax_number?: string;
-  address?: string;
-  created_at: string;
-}
-
-interface CompanyTableProps {
-  companies: Company[];
-  isLoading: boolean;
-  searchTerm: string;
-  onEdit: (company: Company) => void;
-  onSettings: (company: Company) => void;
-  onDelete: (id: string) => Promise<void>;
-}
-
+import { Company, CompanyTableProps } from '@/store/type';
 export default function CompanyTable({ 
   companies, 
   isLoading, 
