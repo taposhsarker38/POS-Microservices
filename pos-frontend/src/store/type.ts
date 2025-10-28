@@ -34,7 +34,7 @@ export type CompanySettings = {
   accent_color?: string;
   background_color?: string;
   text_color?: string;
-  logo?: string;
+  logo?: string | undefined;
   logo_dark?: string;
   favicon?: string;
   nav?: any[];

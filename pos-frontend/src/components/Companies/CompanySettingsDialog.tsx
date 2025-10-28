@@ -18,12 +18,13 @@ interface Props {
   onClose: () => void;
   companyData?: {
     name: string;
-    logo?: string;
+    logo?: string | undefined;
   };
   settingsData?: {
     primary_color?: string;
     font?: string;
     border_radius?: string;
+    logo?: string | undefined;
   };
   onSave?: (data: any) => void;
 }
