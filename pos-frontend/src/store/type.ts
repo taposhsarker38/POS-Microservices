@@ -11,17 +11,66 @@ export interface NavItem {
   created_at?: string;
 }
 
-export interface Company {
-  id?: string;
+export type Company = {
+  id: string;
   name: string;
-  // extend as needed
+  code: string;
+  tax_number?: string;
+  vat_rate?: string;
+  bin_number?: string;
+  accounting_codes?: string;
+  default_payment_terms?: string;
+  address?: string;
+  timezone?: string;
+  metadata?: Record<string, any>;
+  created_at: string;
+};
+
+export type CompanySettings = {
+  id?: string;
+  company: string;
+  primary_color?: string;
+  secondary_color?: string;
+  accent_color?: string;
+  background_color?: string;
+  text_color?: string;
+  logo?: string | undefined;
+  logo_dark?: string;
+  favicon?: string;
+  nav?: any[];
+  metadata?: Record<string, any>;
+  feature_flags?: Record<string, any>;
+  ui_schema?: Record<string, any>;
+  updated_at?: string;
+};
+export interface CompanyTableProps {
+  companies: Company[];
+  isLoading: boolean;
+  searchTerm: string;
+  onEdit: (company: Company) => void;
+  onSettings: (company: Company) => void;
+  onDelete: (id: string) => Promise<void>;
+}
+export interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  company?: Company | null;
+  onSave: (data: Company) => Promise<{ success: boolean; message: string }>;
 }
 
-export interface CompanySettings {
-  logo?: string | null;
-  primary_color?: string | null;
-  // extend as needed
+export interface ApiResponse {
+  message?: string;
+  data?: any;
 }
+
+export interface ApiError {
+  data?: {
+    message?: string;
+    code?: string[];
+  };
+  status?: number;
+}
+
 
 export interface User {
   id: string;
@@ -53,3 +102,7 @@ export interface AuthState {
   isAuthenticated: boolean;
   isInitialized: boolean;
 }
+export interface ResetForm { 
+  password: string; 
+  passwordConfirm: string;
+};

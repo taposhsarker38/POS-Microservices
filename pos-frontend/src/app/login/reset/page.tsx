@@ -9,11 +9,8 @@ import clsx from "clsx";
 import Link from "next/link";
 import { usePasswordresetconfirmMutation } from "@/store/api";
 import AuthLayout, { type AuthLayoutWeatherProps } from "@/components/layout/AuthLayout";
+import type { ResetForm } from "@/store/type";
 
-type ResetForm = { 
-  password: string; 
-  passwordConfirm: string;
-};
 
 export default function ResetPage() {
   const search = useSearchParams();

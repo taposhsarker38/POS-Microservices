@@ -2,8 +2,8 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 // import api from "../../lib/axios";
-import Header from "../../components/layout/Header";
-import Sidebar from "../../components/layout/Sidebar";
+import Header from "../../../components/layout/Header";
+import Sidebar from "../../../components/layout/Sidebar";
 
 export default function InventoryPage() {
   // const { data: items, isLoading } = useQuery(

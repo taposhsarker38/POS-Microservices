@@ -1,7 +1,7 @@
 
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import Cookies from "js-cookie";
-import type { TokenResponse } from "./type"; // adjust path if your types live elsewhere
+import type { TokenResponse } from "./type"; 
 
 export type AuthState = {
   accessToken: string | null;
@@ -42,7 +42,6 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     setAccessToken: (state, action: PayloadAction<string>) => {
-      // guard: don't store falsy or "undefined" string
       if (!action.payload || action.payload === "undefined") return;
       state.accessToken = action.payload;
       state.isAuthenticated = true;
