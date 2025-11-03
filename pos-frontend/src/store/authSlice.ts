@@ -2,7 +2,7 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import Cookies from "js-cookie";
 import type { TokenResponse } from "./type"; 
-
+import { isJwtExpired } from "@/utils/auth";
 export type AuthState = {
   accessToken: string | null;
   refreshToken: string | null;
@@ -12,19 +12,18 @@ export type AuthState = {
 const ACCESS_COOKIE = "access_token";
 const REFRESH_COOKIE = "refresh_token";
 
-const loadTokenFromCookies = (): string | null => {
-  if (typeof window === "undefined") return null;
-  return Cookies.get(ACCESS_COOKIE) || null;
-};
+const initialAccess = typeof window !== "undefined" ? Cookies.get(ACCESS_COOKIE) || null : null;
+const initialRefresh = typeof window !== "undefined" ? Cookies.get(REFRESH_COOKIE) || null : null;
 
 const initialState: AuthState = {
-  accessToken: loadTokenFromCookies(),
-  refreshToken: typeof window !== "undefined" ? Cookies.get(REFRESH_COOKIE) || null : null,
-  isAuthenticated: !!loadTokenFromCookies(),
+  accessToken: initialAccess,
+  refreshToken: initialRefresh,
+  // only true if token exists AND not expired
+  isAuthenticated: !!initialAccess && !isJwtExpired(initialAccess),
 };
 
 const cookieOpts = {
-  expires: 7,
+
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax" as "lax",
   path: "/" as "/",

@@ -44,11 +44,10 @@ class CompanySetting(models.Model):
     logo = models.ImageField(upload_to='company_logos/', blank=True, null=True)
     logo_dark = models.ImageField(upload_to='company_logos/', blank=True, null=True)
     favicon = models.ImageField(upload_to='company_icons/', blank=True, null=True)
-    # nav + feature flags + custom fields
-    nav = models.JSONField(default=list, blank=True)   # e.g. [{"name":"Dashboard","path":"/"},{...}]
-    metadata = models.JSONField(default=dict, blank=True)  # arbitrary data: fonts, layout options
-    feature_flags = models.JSONField(default=dict, blank=True)  # e.g. {"pos_enabled":true}
-    ui_schema = models.JSONField(default=dict, blank=True)  # e.g. custom form fields config
+    nav = models.JSONField(default=list, blank=True)  
+    metadata = models.JSONField(default=dict, blank=True)  
+    feature_flags = models.JSONField(default=dict, blank=True)  
+    ui_schema = models.JSONField(default=dict, blank=True) 
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
