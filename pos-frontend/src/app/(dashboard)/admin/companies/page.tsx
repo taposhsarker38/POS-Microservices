@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Plus, Search, Building2 } from 'lucide-react';
-
+import Swal from 'sweetalert2';
 import { 
   useGetCompaniesQuery, 
   useCreateCompanyMutation, 
@@ -14,6 +14,7 @@ import CompanyFormDialog from '@/components/Companies/CompanyFormDialog';
 import CompanySettingsDialog from '@/components/Companies/CompanySettingsDialog';
 import CompanyTable from '@/components/Companies/CompanyTable';
 import { Company, ApiResponse,ApiError } from '@/store/type';
+import { confirmDelete, showDeleteError, showDeleteSuccess } from '@/lib/sweetAlertHelper';
 
 export default function CompaniesPage() {
   const { data: companies = [], isLoading } = useGetCompaniesQuery();
@@ -41,17 +42,21 @@ export default function CompaniesPage() {
     setCompanySettingsOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this company?')) {
-      try {
-        const response = await deleteCompany(id).unwrap() as unknown as ApiResponse;
-        // Toast handled in CompanyFormDialog
-      } catch (error: any) {
-        console.error('Failed to delete company:', error);
-        // Toast handled in CompanyFormDialog
-      }
+
+const handleDeleteCompany = async (id: string) => {
+  const confirmed = await confirmDelete({
+    entityName: 'Company'
+  });
+
+  if (confirmed) {
+    try {
+      await deleteCompany(id).unwrap();
+      await showDeleteSuccess({ entityName: 'Company' });
+    } catch (error) {
+      await showDeleteError(error);
     }
-  };
+  }
+};
 
   const handleSaveCompany = async (data: any) => {
     try {
@@ -129,7 +134,7 @@ export default function CompaniesPage() {
           searchTerm={searchTerm}
           onEdit={handleEdit}
           onSettings={handleSettings}
-          onDelete={handleDelete}
+          onDelete={handleDeleteCompany}
         />
 
         {/* Stats */}

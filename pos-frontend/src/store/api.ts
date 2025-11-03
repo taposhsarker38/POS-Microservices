@@ -1,3 +1,4 @@
+// api.ts
 import Cookies from "js-cookie";
 import {
   createApi,
@@ -17,10 +18,13 @@ import type {
   Role,
   TokenResponse,
 } from "./type";
+
 type FetchArgsWithPrepare = FetchArgs & {
   prepareHeaders?: (headers: Headers) => Headers | Promise<Headers>;
 };
+
 const ACCESS_COOKIE = "access_token";
+const REFRESH_COOKIE = "refresh_token";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8001";
 const COMPANY_BASE =
@@ -96,44 +100,112 @@ const companyQueryWithForm = formAwareBase(companyFetch);
 
 const mutex = new Mutex();
 
+/**
+ * Normalize different possible refresh responses into { access?, refresh? }
+ * Covers common shapes like:
+ * - { access: '...', refresh: '...' }
+ * - { access_token: '...', refresh_token: '...' }
+ * - { token: { access: '...', refresh: '...' } }
+ */
+const normalizeTokenData = (data: any): TokenResponse | null => {
+  if (!data) return null;
+  if (typeof data !== "object") return null;
+
+  // common django rest simplejwt shape
+  if (data.access || data.refresh) {
+    return { access: data.access, refresh: data.refresh };
+  }
+
+  // alternate keys
+  if (data.access_token || data.refresh_token) {
+    return { access: data.access_token, refresh: data.refresh_token };
+  }
+
+  // nested token
+  if (data.token && (data.token.access || data.token.refresh)) {
+    return { access: data.token.access, refresh: data.token.refresh };
+  }
+
+  return null;
+};
+
 const withReauth =
   (queryFn: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError>) =>
   async (args: string | FetchArgs, api: any, extraOptions: any) => {
+    // ensure any ongoing refresh completes first
     await mutex.waitForUnlock();
     let result = await queryFn(args, api, extraOptions);
+
+    // If unauthorized, attempt refresh (with mutex to avoid concurrent refreshes)
     if ((result as any)?.error?.status === 401) {
+      // Acquire lock to perform refresh if not already locked
       if (!mutex.isLocked()) {
         const release = await mutex.acquire();
         try {
-          const refreshResult = await baseQueryWithForm(
-            { url: "token/refresh/", method: "POST" } as FetchArgs,
-            api,
-            extraOptions,
-          );
+          // Try to refresh tokens:
+          // If we have a client-side refresh token, send it in body.
+          // Otherwise rely on httpOnly cookie (credentials: "include" is set on base fetch).
+          const refreshToken = (api.getState() as RootState).auth?.refreshToken || null;
+
+          const refreshArgs: FetchArgs = refreshToken
+            ? { url: "token/refresh/", method: "POST", body: { refresh: refreshToken } }
+            : { url: "token/refresh/", method: "POST" };
+
+          const refreshResult = await baseQueryWithForm(refreshArgs, api, extraOptions);
+
           if (refreshResult?.data) {
-            const data = refreshResult.data as TokenResponse;
-            if (data.access) {
-              api.dispatch(setAccessToken(data.access));
-            }
-            if (data.refresh) {
-              api.dispatch(setRefreshToken(data.refresh));
+            const tokenData = normalizeTokenData(refreshResult.data);
+            if (tokenData) {
+              if (tokenData.access && tokenData.access !== "undefined") {
+                api.dispatch(setAccessToken(tokenData.access));
+              }
+              if (tokenData.refresh && tokenData.refresh !== "undefined") {
+                api.dispatch(setRefreshToken(tokenData.refresh));
+              }
+            } else {
+              // If server response not in expected shape, still try to read common keys directly
+              // Fallbacks already handled in normalizeTokenData; if nothing, clear auth.
+              api.dispatch(clearAuth());
+              if (typeof window !== "undefined") {
+                Cookies.remove(ACCESS_COOKIE, { path: "/" });
+                Cookies.remove(REFRESH_COOKIE, { path: "/" });
+              }
             }
           } else {
+            // refresh failed
             api.dispatch(clearAuth());
+            if (typeof window !== "undefined") {
+              Cookies.remove(ACCESS_COOKIE, { path: "/" });
+              Cookies.remove(REFRESH_COOKIE, { path: "/" });
+            }
           }
         } finally {
           release();
         }
       } else {
+        // If another task has locked and is refreshing, wait for it to finish
         await mutex.waitForUnlock();
       }
+
+      // Retry original request after refresh attempt (or after waiting for other refresh)
       result = await queryFn(args, api, extraOptions);
+
+      // If still 401, ensure cleanup
+      if ((result as any)?.error?.status === 401) {
+        api.dispatch(clearAuth());
+        if (typeof window !== "undefined") {
+          Cookies.remove(ACCESS_COOKIE, { path: "/" });
+          Cookies.remove(REFRESH_COOKIE, { path: "/" });
+        }
+      }
     }
+
     return result;
   };
 
 const baseQueryWithReauth = withReauth(baseQueryWithForm);
 const companyQueryWithReauth = withReauth(companyQueryWithForm);
+
 export const apiSlice = createApi({
   reducerPath: "api",
   baseQuery: baseQueryWithReauth,
@@ -159,10 +231,12 @@ export const apiSlice = createApi({
         try {
           const { data } = await queryFulfilled;
           if (data) {
-            if (data.access && data.access !== "undefined")
-              dispatch(setAccessToken(data.access));
-            if (data.refresh && data.refresh !== "undefined")
-              dispatch(setRefreshToken(data.refresh));
+            // normalize possible shapes
+            const tokenData = normalizeTokenData(data) || (data as any);
+            if (tokenData.access && tokenData.access !== "undefined")
+              dispatch(setAccessToken(tokenData.access));
+            if (tokenData.refresh && tokenData.refresh !== "undefined")
+              dispatch(setRefreshToken(tokenData.refresh));
           }
         } catch (err) {
           // ignore
@@ -185,6 +259,7 @@ export const apiSlice = createApi({
         try {
           await queryFulfilled;
         } catch {
+          // ignore error from logout endpoint
         } finally {
           dispatch(clearAuth());
           dispatch(apiSlice.util.resetApiState());
